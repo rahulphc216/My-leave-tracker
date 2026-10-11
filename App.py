@@ -18,9 +18,8 @@ OFFICIAL_RH_2026 = {
 }
 
 
-# डेटाबेस सेटअप
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v9.db")
+  conn = sqlite3.connect("my_personal_leaves_v10.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -42,6 +41,14 @@ def init_db():
         )
     """)
 
+  # CPL ke liye alag table taaki ek baar save ho jaye
+  cursor.execute("""
+        CREATE TABLE IF NOT EXISTS my_cpl_setting (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            total_cpl INTEGER
+        )
+    """)
+
   conn.commit()
   conn.close()
 
@@ -53,28 +60,46 @@ def main():
   )
 
   st.title("🏛️ मेरा लीव और अटेंडेंस ट्रैकर (Patna High Court Rules)")
-  st.markdown("दैनिक उपस्थिति और स्मार्ट लीव डैशबोर्ड (बैकडेट एंट्री सहित)")
+  st.markdown("दैनिक उपस्थिति और स्मार्ट लीव डैशबोर्ड")
 
-  # --- साइडबार: कोटा सेटिंग्स ---
-  st.sidebar.header("⚙️ लीव कोटा सेटिंग्स")
+  # --- CPL Managment & Quota Settings (Neeche ya Side bar me adjust) ---
+  st.sidebar.header("⚙️ CPL aur Leave Settings")
+
+  conn = sqlite3.connect("my_personal_leaves_v10.db")
+  c = conn.cursor()
+  c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
+  saved_cpl = c.fetchone()
+  default_cpl = saved_cpl[0] if saved_cpl else 0
+
   total_cpl_allocated = st.sidebar.number_input(
-      "इस साल कुल मान्य CPL (Total Applicable CPL)",
+      "Is saal ke liye Kul Applicable CPL (Ek baar enter karein)",
       min_value=0,
       max_value=50,
-      value=0,
+      value=default_cpl,
       step=1,
   )
 
-  st.sidebar.markdown("---")
-  st.sidebar.header("🟢 उपस्थिति दर्ज करें (Backdate / Daily Attendance)")
+  if st.sidebar.button("CPL Save Karein"):
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM my_cpl_setting")
+    cursor.execute(
+        "INSERT INTO my_cpl_setting (total_cpl) VALUES (?)",
+        (total_cpl_allocated,),
+    )
+    conn.commit()
+    st.sidebar.success("✅ CPL quota safaltapoorvak save ho gaya!")
+    st.rerun()
 
-  # किसी भी पुरानी या आज की तारीख चुनने का विकल्प
+  conn.close()
+
+  st.sidebar.markdown("---")
+  st.sidebar.header("🟢 Upasthiti Darj Karein (Attendance)")
+
   att_selected_date = st.sidebar.date_input(
-      "उपस्थिति की तारीख चुनें (Select Date)", value=date.today()
+      "Tarikh chunein", value=date.today()
   )
 
-  # चुनी गई तारीख की पुरानी अटेंडेंस चेक करना
-  conn = sqlite3.connect("my_personal_leaves_v9.db")
+  conn = sqlite3.connect("my_personal_leaves_v10.db")
   c = conn.cursor()
   c.execute(
       "SELECT status FROM my_attendance WHERE att_date = ?",
@@ -94,13 +119,12 @@ def main():
       else False
   )
   mark_present = st.sidebar.checkbox(
-      f"तारीख {att_selected_date} को कार्यालय में उपस्थित रहे?",
-      value=default_att,
+      f"Tarikh {att_selected_date} ko office aaye the?", value=default_att
   )
 
-  if st.sidebar.button("उपस्थिति सेव/सुधार करें"):
+  if st.sidebar.button("Upasthiti Save Karein"):
     status_val = "Present" if mark_present else "Absent"
-    conn = sqlite3.connect("my_personal_leaves_v9.db")
+    conn = sqlite3.connect("my_personal_leaves_v10.db")
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -111,22 +135,18 @@ def main():
     )
     conn.commit()
     conn.close()
-    st.sidebar.success(
-        f"✅ {att_selected_date} की उपस्थिति '{status_val}' के रूप में दर्ज हो"
-        " गई!"
-    )
+    st.sidebar.success(f"✅ {att_selected_date} ki upasthiti update ho gayi!")
     st.rerun()
 
   st.sidebar.markdown("---")
-  st.sidebar.header("➕ नई छुट्टी जोड़ें (Apply Leave)")
+  st.sidebar.header("➕ Nayi Chhutti Jodein (Apply Leave)")
 
-  # डेटा फेच करना
-  conn = sqlite3.connect("my_personal_leaves_v9.db")
+  # Data Fetch
+  conn = sqlite3.connect("my_personal_leaves_v10.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   conn.close()
 
-  # छुट्टियाँ निकालना
   cl_taken = (
       df[df["leave_type"] == "CL"]["days_count"].sum() if not df.empty else 0
   )
@@ -155,23 +175,23 @@ def main():
       available_rh_options[rh_name] = rh_date_str
 
   with st.sidebar.form("leave_form"):
+    # Ab leave type me se CPL hata diya gaya hai taaki wahan se entry na ho
     leave_category = st.selectbox(
-        "छुट्टी का प्रकार (Leave Type)",
-        ["CL", "CPL", "EL", "RH", "Late Coming"],
+        "Chhutti ka prakar", ["CL", "EL", "RH", "Late Coming"]
     )
 
     if leave_category == "RH":
       if rh_remaining <= 0:
-        st.warning("⚠️ आपने इस साल की दोनों (2) RH पूरी कर ली हैं!")
+        st.warning("⚠️ Dono RH poori ho chuki hain!")
         selected_rh_key = None
         leave_date = today_date
       elif not available_rh_options:
-        st.info("आगामी कोई RH उपलब्ध नहीं है।")
+        st.info("Koi RH uplabdh nahi hai.")
         selected_rh_key = None
         leave_date = today_date
       else:
         selected_rh_key = st.selectbox(
-            "वैध RH चुनें:", list(available_rh_options.keys())
+            "Vaidya RH chunein:", list(available_rh_options.keys())
         )
         leave_date = (
             datetime.strptime(
@@ -181,39 +201,29 @@ def main():
             else today_date
         )
     else:
-      leave_date = st.date_input("छुट्टी की तारीख (Date - पीछे की तारीख भी चुन सकते हैं)")
+      leave_date = st.date_input("Chhutti ki tarikh")
 
     if leave_category == "RH":
       days_count = 1
     else:
       days_count = st.number_input(
-          "दिनों की संख्या (Full Days)",
-          min_value=1,
-          max_value=30,
-          value=1,
-          step=1,
+          "Dino ki sankhya", min_value=1, max_value=30, value=1, step=1
       )
 
-    reason = st.text_area("वजह / टिप्पणी (Optional)")
-    submit = st.form_submit_button("रिकॉर्ड सेव करें")
+    reason = st.text_area("Vajah / Tippani (Optional)")
+    submit = st.form_submit_button("Record Save Karein")
 
     if submit:
       error_msg = None
       if leave_category == "CL" and days_count > cl_remaining:
-        error_msg = (
-            f"❌ त्रुटि: आपके पास केवल {cl_remaining} CL बची है!"
-        )
-      elif leave_category == "CPL" and days_count > cpl_remaining:
-        error_msg = (
-            f"❌ त्रुटि: आपके पास केवल {cpl_remaining} CPL बची है!"
-        )
+        error_msg = f"❌ Error: Kewal {cl_remaining} CL bachi hai!"
       elif leave_category == "RH" and rh_remaining <= 0:
-        error_msg = "❌ त्रुटि: अधिकतम 2 ही RH ले सकते हैं!"
+        error_msg = "❌ Error: Max 2 RH hi le sakte hain!"
 
       if error_msg:
         st.sidebar.error(error_msg)
       else:
-        conn = sqlite3.connect("my_personal_leaves_v9.db")
+        conn = sqlite3.connect("my_personal_leaves_v10.db")
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -237,33 +247,33 @@ def main():
         )
         conn.commit()
         conn.close()
-        st.sidebar.success("✅ छुट्टी का रिकॉर्ड सफलतापर्वक दर्ज हो गया!")
+        st.sidebar.success("✅ Chhutti safaltapoorvak darj ho gayi!")
         st.rerun()
 
-  # --- होम पेज लाइव बैलेंस ---
-  st.markdown("### 🟢 आपका वर्तमान लीव बैलेंस (Live Status)")
+  # --- Home Page Live Balance ---
+  st.markdown("### 🟢 Aapka Vartaman Leave Balance")
   bal_col1, bal_col2, bal_col3, bal_col4 = st.columns(4)
   with bal_col1:
-    st.success(f"**CL बची हुई:** {cl_remaining} दिन")
+    st.success(f"**CL Bacha Hua:** {cl_remaining} din")
   with bal_col2:
-    st.info(f"**CPL बची हुई:** {cpl_remaining} दिन")
+    st.info(f"**CPL Bacha Hua:** {cpl_remaining} din")
   with bal_col3:
     el_balance = 33 - el_taken
-    st.warning(f"**EL बैलेंस:** {el_balance} दिन")
+    st.warning(f"**EL Balance:** {el_balance} din")
   with bal_col4:
-    st.error(f"**RH बची हुई:** {rh_remaining} दिन")
+    st.error(f"**RH Bacha Hua:** {rh_remaining} din")
 
   st.markdown("---")
 
-  # --- कैलेंडर व्यू ---
-  st.subheader("📅 उपस्थिति और लीव कैलेंडर व्यू (Calendar View)")
+  # --- Calendar View (Sirf Rang 🟢 aur 🔴 bina text ke) ---
+  st.subheader("📅 Calendar View")
 
   c_col1, c_col2 = st.columns(2)
   with c_col1:
-    selected_year = st.selectbox("वर्ष चुनें (Year)", [2026, 2027], index=0)
+    selected_year = st.selectbox("Varsh chunein", [2026, 2027], index=0)
   with c_col2:
     selected_month = st.selectbox(
-        "महीना चुनें (Month)",
+        "Mahina chunein",
         list(range(1, 13)),
         format_func=lambda x: calendar.month_name[x],
         index=today_date.month - 1,
@@ -279,12 +289,10 @@ def main():
     for _, row in df.iterrows():
       leave_dates_set.add(row["leave_date"])
 
-  st.markdown(
-      "🟢 **हरा (Present)** | 🔴 **लाल (Leave/Absent)** | ⚪ **सामान्य**"
-  )
+  st.markdown("🟢 **Office Present** | 🔴 **Leave / Absent** | ⚪ **Samanya**")
 
   cal_matrix = calendar.monthcalendar(selected_year, selected_month)
-  days_header = ["सोम", "मंगल", "बुध", "गुरु", "शुक्र", "शनि", "रवि"]
+  days_header = ["Som", "Mangal", "Budh", "Guru", "Shukra", "Shani", "Ravi"]
 
   cal_data = []
   for week in cal_matrix:
@@ -296,9 +304,9 @@ def main():
         d_str = f"{selected_year}-{selected_month:02d}-{day:02d}"
         status = att_dict.get(d_str, "")
         if d_str in leave_dates_set or "Leave" in status:
-          week_row[days_header[i]] = f"🔴 {day} (Leave)"
+          week_row[days_header[i]] = f"🔴 {day}"
         elif status == "Present":
-          week_row[days_header[i]] = f"🟢 {day} (Office)"
+          week_row[days_header[i]] = f"🟢 {day}"
         else:
           week_row[days_header[i]] = f"{day}"
     cal_data.append(week_row)
@@ -306,38 +314,24 @@ def main():
   cal_df = pd.DataFrame(cal_data)
   st.table(cal_df)
 
-  # --- मेट्रिक्स और हिस्ट्री ---
+  # --- History & Delete ---
   st.markdown("---")
-  st.subheader("📊 वार्षिक लीव कोटा समरी")
-  col1, col2, col3, col4 = st.columns(4)
-  with col1:
-    st.metric("CL", f"खर्च: {cl_taken}", f"शेष: {cl_remaining}")
-  with col2:
-    st.metric("CPL", f"खर्च: {cpl_taken}", f"शेष: {cpl_remaining}")
-  with col3:
-    st.metric("EL", f"खर्च: {el_taken}", f"बैलेंस: {el_balance}")
-  with col4:
-    st.metric("RH", f"खर्च: {rh_taken}", f"शेष: {rh_remaining}")
-
-  st.markdown("---")
-  st.subheader("📋 सभी लीव रिकॉर्ड्स (History)")
+  st.subheader("📋 Sabhi Leave Records (History)")
   if not df.empty:
     st.dataframe(df, use_container_width=True)
 
-    del_id = st.number_input(
-        "हटाने के लिए रिकॉर्ड ID दर्ज करें", min_value=0, step=1
-    )
-    if st.button("चयनित रिकॉर्ड हटाएं"):
+    del_id = st.number_input("Hatane ke liye Record ID darj karein", min_value=0, step=1)
+    if st.button("Chayanit Record Hatayein"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v9.db")
+        conn = sqlite3.connect("my_personal_leaves_v10.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
         conn.close()
-        st.success(f"ID {del_id} का रिकॉर्ड हटा दिया गया है!")
+        st.success(f"ID {del_id} ka record hata diya gaya hai!")
         st.rerun()
   else:
-    st.info("अभी तक कोई लीव रिकॉर्ड दर्ज नहीं है।")
+    st.info("Abhi tak koi leave record darj nahi hai.")
 
 
 if __name__ == "__main__":
