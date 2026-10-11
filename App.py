@@ -60,7 +60,7 @@ OFFICIAL_HALFDAY_2026 = {
 
 
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v35.db")
+  conn = sqlite3.connect("my_personal_leaves_v36.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -109,21 +109,53 @@ def main():
   )
 
   st.title("🏛️ मेरा लीव और अटेंडेंस ट्रैकर (Patna High Court Rules)")
-  st.markdown("डेट स्टेटस चेक, रोस्टर और स्मार्ट डैशबोर्ड")
+  st.markdown("ऑटो-सिंक लीव, हॉलिडे अलर्ट और स्मार्ट डैशबोर्ड")
+
+  today_date = date.today()
+  today_str = str(today_date)
+  is_today_sunday = today_date.weekday() == 6
+
+  conn_h = sqlite3.connect("my_personal_leaves_v36.db")
+  ch = conn_h.cursor()
+  ch.execute(
+      "SELECT occasion FROM custom_holidays WHERE holiday_date = ?",
+      (today_str,),
+  )
+  cust_today = ch.fetchone()
+  conn_h.close()
+
+  is_today_gazetted = (
+      today_date.year == 2026 and today_str in OFFICIAL_GAZETTED_2026
+  ) or (cust_today is not None)
+
+  # --- HOLIDAY NOTIFICATION BANNER ---
+  if is_today_sunday:
+    st.info(
+        f"🎉 **आज रविवार (Sunday) है — ऑफिस बंद है!** (Date: {today_date})"
+    )
+  elif is_today_gazetted:
+    occ_name = (
+        cust_today[0]
+        if cust_today
+        else OFFICIAL_GAZETTED_2026.get(today_str, "Gazetted Holiday")
+    )
+    st.info(
+        f"🎉 **आज सार्वजनिक अवकाश है!** अवसर: **{occ_name}** (Date:"
+        f" {today_date})"
+    )
 
   # --- 1. PROMINENT ATTENDANCE & ROSTER REGISTER ---
   with st.sidebar.expander(
       "🟢 🟢 अटेंडेंस और रोस्टर रजिस्टर (Attendance & Roster)", expanded=False
   ):
     st.markdown("### **उपस्थिति या रोस्टर ड्यूटी दर्ज करें**")
-    today_date = date.today()
     att_selected_date = st.date_input(
         "तारीख चुनें (Select Date)", value=today_date, key="att_date_input"
     )
 
     is_sunday_selected = att_selected_date.weekday() == 6
 
-    conn = sqlite3.connect("my_personal_leaves_v35.db")
+    conn = sqlite3.connect("my_personal_leaves_v36.db")
     c = conn.cursor()
     c.execute(
         "SELECT status, remarks FROM my_attendance WHERE att_date = ?",
@@ -185,7 +217,7 @@ def main():
       else:
         status_db = "Absent"
 
-      conn = sqlite3.connect("my_personal_leaves_v35.db")
+      conn = sqlite3.connect("my_personal_leaves_v36.db")
       cursor = conn.cursor()
       cursor.execute(
           """
@@ -199,9 +231,9 @@ def main():
       st.success("✅ उपस्थिति/रोस्टर रिकॉर्ड सुरक्षित हो गया!")
       st.rerun()
 
-  # --- 2. ADVANCED DATE STATUS & DETAILS CHECKER (UPDATED FORMAT) ---
+  # --- 2. ADVANCED DATE STATUS & DETAILS CHECKER ---
   with st.sidebar.expander(
-      "🔍 Date Status & Details Checker", expanded=True
+      "🔍 Date Status & Details Checker", expanded=False
   ):
     check_date = st.date_input(
         "Tarik chunein:", value=today_date, key="check_dt"
@@ -209,7 +241,7 @@ def main():
     d_str_chk = str(check_date)
     chk_weekday = check_date.weekday()
 
-    conn = sqlite3.connect("my_personal_leaves_v35.db")
+    conn = sqlite3.connect("my_personal_leaves_v36.db")
     c = conn.cursor()
     c.execute(
         "SELECT status, remarks FROM my_attendance WHERE att_date = ?",
@@ -235,7 +267,6 @@ def main():
     is_cust = cust_res is not None
     is_half = check_date.year == 2026 and d_str_chk in OFFICIAL_HALFDAY_2026
 
-    # Determine base day type
     if is_sun:
       day_type_str = "Sunday Off"
     elif is_cust:
@@ -249,7 +280,6 @@ def main():
     else:
       day_type_str = "Normal Working Day"
 
-    # Determine action / attendance status
     if leave_res:
       action_str = f"On Leave ({leave_res[0]}) - Reason: {leave_res[1]}"
     elif att_res:
@@ -278,7 +308,7 @@ def main():
 
   # --- 3. EDIT / DELETE ATTENDANCE REGISTER ---
   with st.sidebar.expander("✏️ पुरानी अटेंडेंस एडिट या सुधार करें"):
-    conn = sqlite3.connect("my_personal_leaves_v35.db")
+    conn = sqlite3.connect("my_personal_leaves_v36.db")
     att_df_all = pd.read_sql_query(
         "SELECT * FROM my_attendance ORDER BY att_date DESC", conn
     )
@@ -313,7 +343,7 @@ def main():
       col_e1, col_e2 = st.columns(2)
       with col_e1:
         if st.button("Update Karein"):
-          conn = sqlite3.connect("my_personal_leaves_v35.db")
+          conn = sqlite3.connect("my_personal_leaves_v36.db")
           cursor = conn.cursor()
           cursor.execute(
               "UPDATE my_attendance SET status = ?, remarks = ? WHERE att_date"
@@ -326,7 +356,7 @@ def main():
           st.rerun()
       with col_e2:
         if st.button("Record Hatayein"):
-          conn = sqlite3.connect("my_personal_leaves_v35.db")
+          conn = sqlite3.connect("my_personal_leaves_v36.db")
           cursor = conn.cursor()
           cursor.execute(
               "DELETE FROM my_attendance WHERE att_date = ?",
@@ -339,11 +369,11 @@ def main():
     else:
       st.info("Abhi koi attendance record nahi hai.")
 
-  # --- 4. ADVANCE / REGULAR LEAVE APPLY ---
+  # --- 4. ADVANCE / REGULAR LEAVE APPLY (WITH AUTO ATTENDANCE SYNC) ---
   with st.sidebar.expander(
       "➕ एडवांस / नई छुट्टी जोड़ें (Apply / Advance Leave)", expanded=False
   ):
-    conn = sqlite3.connect("my_personal_leaves_v35.db")
+    conn = sqlite3.connect("my_personal_leaves_v36.db")
     df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
@@ -397,8 +427,9 @@ def main():
         if error_msg:
           st.error(error_msg)
         else:
-          conn = sqlite3.connect("my_personal_leaves_v35.db")
+          conn = sqlite3.connect("my_personal_leaves_v36.db")
           cursor = conn.cursor()
+          # 1. Insert into my_leaves
           cursor.execute(
               """
                       INSERT INTO my_leaves (leave_type, leave_date, days_count, reason, timestamp)
@@ -412,6 +443,7 @@ def main():
                   str(datetime.now().strftime("%Y-%m-%d %H:%M")),
               ),
           )
+          # 2. Automatically update attendance table as Leave
           cursor.execute(
               """
                       INSERT OR REPLACE INTO my_attendance (att_date, status, remarks)
@@ -421,7 +453,7 @@ def main():
           )
           conn.commit()
           conn.close()
-          st.success("✅ एडवांस/नियमित छुट्टी दर्ज हो गई!")
+          st.success("✅ छुट्टी दर्ज हो गई और अटेंडेंस में स्वतः अपडेट हो गई!")
           st.rerun()
 
   # --- 5. QUICK ADD MISSING HOLIDAY ---
@@ -433,7 +465,7 @@ def main():
         "अवसर/वजह (जैसे Gazetted Holiday)", value="Gazetted Holiday"
     )
     if st.button("छुट्टी सेव करें", use_container_width=True):
-      conn = sqlite3.connect("my_personal_leaves_v35.db")
+      conn = sqlite3.connect("my_personal_leaves_v36.db")
       cursor = conn.cursor()
       try:
         cursor.execute(
@@ -453,7 +485,7 @@ def main():
 
   # --- 6. MANUAL CPL SETTINGS ---
   with st.sidebar.expander("⚙️ मैनुअल CPL कोटा सेटिंग्स"):
-    conn = sqlite3.connect("my_personal_leaves_v35.db")
+    conn = sqlite3.connect("my_personal_leaves_v36.db")
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
     saved_cpl = c.fetchone()
@@ -468,7 +500,7 @@ def main():
         step=1,
     )
     if st.button("CPL सेव करें"):
-      conn = sqlite3.connect("my_personal_leaves_v35.db")
+      conn = sqlite3.connect("my_personal_leaves_v36.db")
       cursor = conn.cursor()
       cursor.execute("DELETE FROM my_cpl_setting")
       cursor.execute(
@@ -481,7 +513,7 @@ def main():
       st.rerun()
 
   # Refresh data for main view
-  conn = sqlite3.connect("my_personal_leaves_v35.db")
+  conn = sqlite3.connect("my_personal_leaves_v36.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   custom_hol_df = pd.read_sql_query("SELECT * FROM custom_holidays", conn)
@@ -608,7 +640,11 @@ def main():
         tooltip = ""
         extra_badge = ""
 
-        if status == "Present" or status == "Sunday Emergency":
+        if "Leave" in status or d_str in leave_dates_set:
+          bg_color = "#ffebee"
+          text_color = "#c62828"
+          border_color = "#ef9a9a"
+        elif status == "Present" or status == "Sunday Emergency":
           if is_sunday or is_gazetted:
             bg_color = "#c8e6c9"
             text_color = "#1b5e20"
@@ -620,9 +656,6 @@ def main():
           else:
             bg_color = "#e8f5e9"
             text_color = "#2e7d32"
-        elif d_str in leave_dates_set or "Leave" in status:
-          bg_color = "#ffebee"
-          text_color = "#c62828"
         elif is_sunday or is_gazetted:
           bg_color = "#e3f2fd"
           text_color = "#1565c0"
@@ -653,7 +686,7 @@ def main():
     )
     if st.button("चयनित रिकॉर्ड हटाएं"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v35.db")
+        conn = sqlite3.connect("my_personal_leaves_v36.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
