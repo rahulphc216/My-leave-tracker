@@ -74,18 +74,29 @@ def main():
       st.sidebar.success("✅ आपकी छुट्टी का रिकॉर्ड सफलतापर्वक दर्ज हो गया!")
       st.rerun()
 
-  # --- नया सेक्शन: पुरानी/अक्टूबर से पहले ली गई छुट्टियाँ सेट करने के लिए ---
+  # --- पुरानी/अक्टूबर से पहले ली गई छुट्टियाँ सेट करने का सेक्शन (CPL सहित) ---
   st.sidebar.markdown("---")
   st.sidebar.subheader("⚙️ Purani Chhuttiyan (Opening Balance)")
   st.sidebar.markdown(
-      "Agar October se pehle kuch chhutti use ki hain, toh yahan enter karein:"
+      "October se pehle ki li gayi purani chhuttiyan yahan enter karein:"
   )
 
   past_cl = st.sidebar.number_input(
       "Pehle li gayi total CL", min_value=0.0, max_value=16.0, value=0.0, step=0.5
   )
+  past_cpl = st.sidebar.number_input(
+      "Pehle li gayi total CPL",
+      min_value=0.0,
+      max_value=30.0,
+      value=0.0,
+      step=0.5,
+  )
   past_el = st.sidebar.number_input(
-      "Pehle li gayi total EL", min_value=0.0, max_value=100.0, value=0.0, step=0.5
+      "Pehle li gayi total EL",
+      min_value=0.0,
+      max_value=100.0,
+      value=0.0,
+      step=0.5,
   )
   past_rh = st.sidebar.number_input(
       "Pehle li gayi total RH", min_value=0.0, max_value=2.0, value=0.0, step=1.0
@@ -119,9 +130,9 @@ def main():
   )
 
   total_cl_taken = app_cl + past_cl
+  total_cpl_taken = app_cpl + past_cpl
   total_el_taken = app_el + past_el
   total_rh_taken = app_rh + past_rh
-  total_cpl_taken = app_cpl  # CPL flexible hota hai
 
   # मेट्रिक्स और बैलेंस दिखाना
   st.subheader("📊 वार्षिक लीव बैलेंस और स्थिति (Leave Quota Summary)")
@@ -136,7 +147,9 @@ def main():
     )
   with col2:
     st.metric(
-        "CPL (Compensatory)", f"Kul Li Gai: {total_cpl_taken}", "1 Saal Validity"
+        "CPL (Compensatory)",
+        f"Kul Kharch: {total_cpl_taken}",
+        "1 Saal Validity",
     )
   with col3:
     el_balance = 33 - total_el_taken
