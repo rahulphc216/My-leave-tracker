@@ -22,7 +22,7 @@ OFFICIAL_RH = {
 
 
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v16.db")
+  conn = sqlite3.connect("my_personal_leaves_v17.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -63,11 +63,11 @@ def main():
   )
 
   st.title("🏛️ मेरा लीव और अटेंडेंस ट्रैकर (Patna High Court Rules)")
-  st.markdown("ऑटोमैटिक लीव सिंक और स्मार्ट डैशबोर्ड")
+  st.markdown("ऑटोमैटिक लीव सिंक और स्मार्ट कलर-कोडेड डैशबोर्ड")
 
-  # --- CPL Setting Expander ---
+  # --- 1. Advanced Settings Expander (CPL) ---
   with st.sidebar.expander("⚙️ Advanced Settings (CPL Quota Setup)"):
-    conn = sqlite3.connect("my_personal_leaves_v16.db")
+    conn = sqlite3.connect("my_personal_leaves_v17.db")
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
     saved_cpl = c.fetchone()
@@ -83,7 +83,7 @@ def main():
     )
 
     if st.button("CPL Quota Save Karein"):
-      conn = sqlite3.connect("my_personal_leaves_v16.db")
+      conn = sqlite3.connect("my_personal_leaves_v17.db")
       cursor = conn.cursor()
       cursor.execute("DELETE FROM my_cpl_setting")
       cursor.execute(
@@ -95,14 +95,14 @@ def main():
       st.success("✅ CPL quota save ho gaya!")
       st.rerun()
 
-  conn = sqlite3.connect("my_personal_leaves_v16.db")
+  conn = sqlite3.connect("my_personal_leaves_v17.db")
   c = conn.cursor()
   c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
   saved_cpl = c.fetchone()
   active_cpl_quota = saved_cpl[0] if saved_cpl else 0
   conn.close()
 
-  # --- Upload Calendar / RH List ---
+  # --- 2. Upload Calendar / RH List Expander ---
   with st.sidebar.expander("📤 Upload Calendar / RH List (For 2027+)"):
     uploaded_file = st.file_uploader(
         "High Court Calendar Image/PDF upload karein", type=["png", "jpg", "pdf"]
@@ -110,18 +110,16 @@ def main():
     if uploaded_file is not None:
       st.success("📁 File upload ho gayi! Calendar data sync ke liye taiyar hai.")
 
-  # --- Attendance Manager (Default Hide / Collapsed) ---
-  with st.sidebar.expander(
-      "🟢 Manual Attendance / Sunday Emergency Manager"
-  ):
+  # --- 3. Manual Attendance / Sunday Emergency Expander ---
+  with st.sidebar.expander("🟢 Manual Attendance / Emergency Manager"):
     today_date = date.today()
     att_selected_date = st.date_input(
-        "Tarikh chunein (Auto Today)", value=today_date, key="att_date_input"
+        "Tarikh chunein", value=today_date, key="att_date_input"
     )
 
     is_sunday_selected = att_selected_date.weekday() == 6
 
-    conn = sqlite3.connect("my_personal_leaves_v16.db")
+    conn = sqlite3.connect("my_personal_leaves_v17.db")
     c = conn.cursor()
     c.execute(
         "SELECT status, remarks FROM my_attendance WHERE att_date = ?",
@@ -177,7 +175,7 @@ def main():
       else:
         status_db = "Absent"
 
-      conn = sqlite3.connect("my_personal_leaves_v16.db")
+      conn = sqlite3.connect("my_personal_leaves_v17.db")
       cursor = conn.cursor()
       cursor.execute(
           """
@@ -188,16 +186,126 @@ def main():
       )
       conn.commit()
       conn.close()
-      st.success(
-          f"✅ {att_selected_date} ki upasthiti safaltapoorvak save ho gayi!"
-      )
+      st.success("✅ Upasthiti safaltapoorvak save ho gayi!")
       st.rerun()
 
-  st.sidebar.markdown("---")
-  st.sidebar.header("➕ Nayi Chhutti Jodein (Apply Leave)")
+  # --- 4. Apply Leave Expander (Hidden by default) ---
+  with st.sidebar.expander("➕ Nayi Chhutti Jodein (Apply Leave)", expanded=False):
+    # Data Fetch inside expander
+    conn = sqlite3.connect("my_personal_leaves_v17.db")
+    df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
+    conn.close()
 
-  # Data Fetch
-  conn = sqlite3.connect("my_personal_leaves_v16.db")
+    cl_taken = (
+        df[df["leave_type"] == "CL"]["days_count"].sum() if not df.empty else 0
+    )
+    cpl_taken = (
+        df[df["leave_type"] == "CPL"]["days_count"].sum() if not df.empty else 0
+    )
+    el_taken = (
+        df[df["leave_type"] == "EL"]["days_count"].sum() if not df.empty else 0
+    )
+
+    rh_df = df[df["leave_type"] == "RH"] if not df.empty else pd.DataFrame()
+    rh_taken = rh_df["days_count"].sum() if not rh_df.empty else 0
+    already_taken_rh_dates = (
+        rh_df["leave_date"].tolist() if not rh_df.empty else []
+    )
+
+    cl_remaining = 16 - cl_taken
+    cpl_remaining = active_cpl_quota - cpl_taken
+    rh_remaining = 2 - rh_taken
+
+    target_year = date.today().year
+    year_rh_dict = OFFICIAL_RH.get(target_year, OFFICIAL_RH[2026])
+
+    available_rh_options = {}
+    for rh_name, rh_date_str in year_rh_dict.items():
+      rh_dt = datetime.strptime(rh_date_str, "%Y-%m-%d").date()
+      if rh_dt >= date.today() and rh_date_str not in already_taken_rh_dates:
+        available_rh_options[rh_name] = rh_date_str
+
+    with st.form("leave_form"):
+      leave_category = st.selectbox(
+          "Chhutti ka prakar", ["CL", "CPL", "EL", "RH", "Late Coming"]
+      )
+
+      if leave_category == "RH":
+        if rh_remaining <= 0:
+          st.warning("⚠️ Dono RH poori ho chuki hain!")
+          selected_rh_key = None
+          leave_date = date.today()
+        elif not available_rh_options:
+          st.info("Is saal ke liye koi aur RH uplabdh nahi hai.")
+          selected_rh_key = None
+          leave_date = date.today()
+        else:
+          selected_rh_key = st.selectbox(
+              "Vaidya RH chunein:", list(available_rh_options.keys())
+          )
+          leave_date = (
+              datetime.strptime(
+                  year_rh_dict[selected_rh_key], "%Y-%m-%d"
+              ).date()
+              if selected_rh_key
+              else date.today()
+          )
+      else:
+        leave_date = st.date_input("Chhutti ki tarikh")
+
+      if leave_category == "RH":
+        days_count = 1
+      else:
+        days_count = st.number_input(
+            "Dino ki sankhya", min_value=1, max_value=30, value=1, step=1
+        )
+
+      reason = st.text_area("Vajah / Tippani (Reason)")
+      submit = st.form_submit_button("Record Save Karein")
+
+      if submit:
+        error_msg = None
+        if leave_category == "CL" and days_count > cl_remaining:
+          error_msg = f"❌ Error: Kewal {cl_remaining} CL bachi hai!"
+        elif leave_category == "CPL" and days_count > cpl_remaining:
+          error_msg = f"❌ Error: Kewal {cpl_remaining} CPL bachi hai!"
+        elif leave_category == "RH" and rh_remaining <= 0:
+          error_msg = f"❌ Error: Max 2 RH hi le sakte hain!"
+
+        if error_msg:
+          st.error(error_msg)
+        else:
+          conn = sqlite3.connect("my_personal_leaves_v17.db")
+          cursor = conn.cursor()
+          cursor.execute(
+              """
+                      INSERT INTO my_leaves (leave_type, leave_date, days_count, reason, timestamp)
+                      VALUES (?, ?, ?, ?, ?)
+                  """,
+              (
+                  leave_category,
+                  str(leave_date),
+                  days_count,
+                  reason,
+                  str(datetime.now().strftime("%Y-%m-%d %H:%M")),
+              ),
+          )
+          cursor.execute(
+              """
+                      INSERT OR REPLACE INTO my_attendance (att_date, status, remarks)
+                      VALUES (?, ?, ?)
+                  """,
+              (str(leave_date), f"Leave ({leave_category})", reason),
+          )
+          conn.commit()
+          conn.close()
+          st.success(
+              "✅ Chhutti darj ho gayi aur calendar me update ho gayi!"
+          )
+          st.rerun()
+
+  # Refresh data for main view
+  conn = sqlite3.connect("my_personal_leaves_v17.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   conn.close()
@@ -214,99 +322,11 @@ def main():
 
   rh_df = df[df["leave_type"] == "RH"] if not df.empty else pd.DataFrame()
   rh_taken = rh_df["days_count"].sum() if not rh_df.empty else 0
-  already_taken_rh_dates = (
-      rh_df["leave_date"].tolist() if not rh_df.empty else []
-  )
 
   cl_remaining = 16 - cl_taken
   cpl_remaining = active_cpl_quota - cpl_taken
   rh_remaining = 2 - rh_taken
-
-  target_year = date.today().year
-  year_rh_dict = OFFICIAL_RH.get(target_year, OFFICIAL_RH[2026])
-
-  available_rh_options = {}
-  for rh_name, rh_date_str in year_rh_dict.items():
-    rh_dt = datetime.strptime(rh_date_str, "%Y-%m-%d").date()
-    if rh_dt >= date.today() and rh_date_str not in already_taken_rh_dates:
-      available_rh_options[rh_name] = rh_date_str
-
-  with st.sidebar.form("leave_form"):
-    leave_category = st.selectbox(
-        "Chhutti ka prakar", ["CL", "CPL", "EL", "RH", "Late Coming"]
-    )
-
-    if leave_category == "RH":
-      if rh_remaining <= 0:
-        st.warning("⚠️ Dono RH poori ho chuki hain!")
-        selected_rh_key = None
-        leave_date = date.today()
-      elif not available_rh_options:
-        st.info("Is saal ke liye koi aur RH uplabdh nahi hai.")
-        selected_rh_key = None
-        leave_date = date.today()
-      else:
-        selected_rh_key = st.selectbox(
-            "Vaidya RH chunein:", list(available_rh_options.keys())
-        )
-        leave_date = (
-            datetime.strptime(
-                year_rh_dict[selected_rh_key], "%Y-%m-%d"
-            ).date()
-            if selected_rh_key
-            else date.today()
-        )
-    else:
-      leave_date = st.date_input("Chhutti ki tarikh")
-
-    if leave_category == "RH":
-      days_count = 1
-    else:
-      days_count = st.number_input(
-          "Dino ki sankhya", min_value=1, max_value=30, value=1, step=1
-      )
-
-    reason = st.text_area("Vajah / Tippani (Reason)")
-    submit = st.form_submit_button("Record Save Karein")
-
-    if submit:
-      error_msg = None
-      if leave_category == "CL" and days_count > cl_remaining:
-        error_msg = f"❌ Error: Kewal {cl_remaining} CL bachi hai!"
-      elif leave_category == "CPL" and days_count > cpl_remaining:
-        error_msg = f"❌ Error: Kewal {cpl_remaining} CPL bachi hai!"
-      elif leave_category == "RH" and rh_remaining <= 0:
-        error_msg = f"❌ Error: Max 2 RH hi le sakte hain!"
-
-      if error_msg:
-        st.sidebar.error(error_msg)
-      else:
-        conn = sqlite3.connect("my_personal_leaves_v16.db")
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-                    INSERT INTO my_leaves (leave_type, leave_date, days_count, reason, timestamp)
-                    VALUES (?, ?, ?, ?, ?)
-                """,
-            (
-                leave_category,
-                str(leave_date),
-                days_count,
-                reason,
-                str(datetime.now().strftime("%Y-%m-%d %H:%M")),
-            ),
-        )
-        cursor.execute(
-            """
-                    INSERT OR REPLACE INTO my_attendance (att_date, status, remarks)
-                    VALUES (?, ?, ?)
-                """,
-            (str(leave_date), f"Leave ({leave_category})", reason),
-        )
-        conn.commit()
-        conn.close()
-        st.sidebar.success("✅ Chhutti darj ho gayi aur calendar me update ho gayi!")
-        st.rerun()
+  el_balance = 33 - el_taken
 
   # --- Home Page Live Balance ---
   st.markdown("### 🟢 Aapka Vartaman Leave Balance")
@@ -316,14 +336,13 @@ def main():
   with bal_col2:
     st.info(f"**CPL Bacha Hua:** {cpl_remaining} din")
   with bal_col3:
-    el_balance = 33 - el_taken
     st.warning(f"**EL Balance:** {el_balance} din")
   with bal_col4:
     st.error(f"**RH Bacha Hua:** {rh_remaining} din")
 
   st.markdown("---")
 
-  # --- Calendar View ---
+  # --- Advanced HTML Color-Coded Calendar View ---
   st.subheader("📅 Calendar View")
 
   c_col1, c_col2 = st.columns(2)
@@ -347,39 +366,69 @@ def main():
     for _, row in df.iterrows():
       leave_dates_set.add(row["leave_date"])
 
+  # Color Legend Display
   st.markdown(
-      "🟢 **Office Present** | 🟡 **Half-Day Office** | 🔴 **Leave** | 🔵 **Sunday"
-      " (Off)** | ⚪ **Samanya**"
+      """
+    <div style="display: flex; gap: 15px; margin-bottom: 15px; font-size: 14px; font-weight: bold;">
+        <span style="color: #2e7d32; background: #e8f5e9; padding: 4px 8px; border-radius: 4px;">🟢 Present</span>
+        <span style="color: #f57f17; background: #fffde7; padding: 4px 8px; border-radius: 4px;">🟡 Half-Day</span>
+        <span style="color: #c62828; background: #ffebee; padding: 4px 8px; border-radius: 4px;">🔴 Leave</span>
+        <span style="color: #1565c0; background: #e3f2fd; padding: 4px 8px; border-radius: 4px;">🔵 Sunday (Off)</span>
+        <span style="color: #616161; background: #f5f5f5; padding: 4px 8px; border-radius: 4px;">⚪ Normal</span>
+    </div>
+    """,
+      unsafe_allow_html=True,
   )
 
+  # Generating HTML Calendar Grid
   cal_matrix = calendar.monthcalendar(selected_year, selected_month)
   days_header = ["Som", "Mangal", "Budh", "Guru", "Shukra", "Shani", "Ravi"]
 
-  cal_data = []
+  html_table = (
+      "<table style='width:100%; border-collapse: collapse; text-align: center;"
+      " font-family: sans-serif;'>"
+  )
+  html_table += "<tr>"
+  for dh in days_header:
+    html_table += f"<th style='border: 1px solid #ddd; padding: 10px; background-color: #f8f9fa; color: #333;'>{dh}</th>"
+  html_table += "</tr>"
+
   for week in cal_matrix:
-    week_row = {}
+    html_table += "<tr>"
     for i, day in enumerate(week):
       if day == 0:
-        week_row[days_header[i]] = ""
+        html_table += (
+            "<td style='border: 1px solid #ddd; padding: 15px; background-color:"
+            " #fafafa;'></td>"
+        )
       else:
         d_str = f"{selected_year}-{selected_month:02d}-{day:02d}"
         status = att_dict.get(d_str, "")
         is_sunday = i == 6
 
-        if d_str in leave_dates_set or "Leave" in status:
-          week_row[days_header[i]] = f"🔴 {day}"
-        elif is_sunday and status != "Present":
-          week_row[days_header[i]] = f"🔵 {day}"
-        elif status == "Present" or status == "Sunday Emergency":
-          week_row[days_header[i]] = f"🟢 {day}"
-        elif status == "Half-Day":
-          week_row[days_header[i]] = f"🟡 {day}"
-        else:
-          week_row[days_header[i]] = f"{day}"
-    cal_data.append(week_row)
+        # Default style (Normal)
+        bg_color = "#ffffff"
+        text_color = "#333333"
+        border_color = "#ddd"
 
-  cal_df = pd.DataFrame(cal_data)
-  st.table(cal_df)
+        if d_str in leave_dates_set or "Leave" in status:
+          bg_color = "#ffebee"  # Light Red
+          text_color = "#c62828"  # Dark Red
+        elif is_sunday and status != "Present":
+          bg_color = "#e3f2fd"  # Light Blue
+          text_color = "#1565c0"  # Dark Blue
+        elif status == "Present" or status == "Sunday Emergency":
+          bg_color = "#e8f5e9"  # Light Green
+          text_color = "#2e7d32"  # Dark Green
+        elif status == "Half-Day":
+          bg_color = "#fffde7"  # Light Yellow
+          text_color = "#f57f17"  # Dark Yellow/Orange
+
+        html_table += f"<td style='border: 1px solid {border_color}; padding: 15px; background-color: {bg_color}; color: {text_color}; font-weight: bold; font-size: 16px;'>{day}</td>"
+    html_table += "</tr>"
+  html_table += "</table>"
+
+  st.markdown(html_table, unsafe_allow_html=True)
 
   # --- History & Delete ---
   st.markdown("---")
@@ -392,7 +441,7 @@ def main():
     )
     if st.button("Chayanit Record Hatayein"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v16.db")
+        conn = sqlite3.connect("my_personal_leaves_v17.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
@@ -400,7 +449,7 @@ def main():
         st.success(f"ID {del_id} ka record hata diya gaya hai!")
         st.rerun()
   else:
-    st.info("Abhi तक कोई लीव रिकॉर्ड दर्ज नहीं है।")
+    st.info("Abhi tak koi leave record darj nahi hai.")
 
 
 if __name__ == "__main__":
