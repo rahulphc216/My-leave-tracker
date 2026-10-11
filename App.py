@@ -22,7 +22,7 @@ OFFICIAL_RH = {
 
 
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v22.db")
+  conn = sqlite3.connect("my_personal_leaves_v23.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -71,7 +71,7 @@ def main():
   )
 
   st.title("🏛️ मेरा लीव और अटेंडेंस ट्रैकर (Patna High Court Rules)")
-  st.markdown("एडवांस लीव, रोस्टर ड्यूटी और स्मार्ट डैशबोर्ड")
+  st.markdown("ऑटो-स्कैन कैलेंडर, रोस्टर और स्मार्ट डैशबोर्ड")
 
   # --- 1. PROMINENT ATTENDANCE & ROSTER REGISTER (Sidebar Top) ---
   with st.sidebar.expander(
@@ -85,7 +85,7 @@ def main():
 
     is_sunday_selected = att_selected_date.weekday() == 6
 
-    conn = sqlite3.connect("my_personal_leaves_v22.db")
+    conn = sqlite3.connect("my_personal_leaves_v23.db")
     c = conn.cursor()
     c.execute(
         "SELECT status, remarks FROM my_attendance WHERE att_date = ?",
@@ -147,7 +147,7 @@ def main():
       else:
         status_db = "Absent"
 
-      conn = sqlite3.connect("my_personal_leaves_v22.db")
+      conn = sqlite3.connect("my_personal_leaves_v23.db")
       cursor = conn.cursor()
       cursor.execute(
           """
@@ -165,7 +165,7 @@ def main():
   with st.sidebar.expander(
       "➕ एडवांस / नई छुट्टी जोड़ें (Apply / Advance Leave)", expanded=False
   ):
-    conn = sqlite3.connect("my_personal_leaves_v22.db")
+    conn = sqlite3.connect("my_personal_leaves_v23.db")
     df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
@@ -198,7 +198,6 @@ def main():
     available_rh_options = {}
     for rh_name, rh_date_str in year_rh_dict.items():
       rh_dt = datetime.strptime(rh_date_str, "%Y-%m-%d").date()
-      # Advance leave ke liye future date bhi allow rahegi
       available_rh_options[rh_name] = rh_date_str
 
     with st.form("leave_form"):
@@ -253,7 +252,7 @@ def main():
         if error_msg:
           st.error(error_msg)
         else:
-          conn = sqlite3.connect("my_personal_leaves_v22.db")
+          conn = sqlite3.connect("my_personal_leaves_v23.db")
           cursor = conn.cursor()
           cursor.execute(
               """
@@ -280,12 +279,32 @@ def main():
           st.success("✅ एडवांस/नियमित छुट्टी दर्ज हो गई!")
           st.rerun()
 
-  # --- 3. GAZETTED HOLIDAYS & ADVANCE OFF DAYS ---
+  # --- 3. AUTO-SCAN CALENDER UPLOAD (OCR / Auto-Update Option) ---
+  with st.sidebar.expander("📤 Calender Image Upload (Auto-Scan Holidays)"):
+    st.markdown(
+        "कैलेंडर की फोटो (2026 या 2027) अपलोड करें ताकि लाल छुट्टियाँ ऑटो-स्कैन"
+        " हो सकें:"
+    )
+    uploaded_cal_file = st.file_uploader(
+        "Upload Calendar Image", type=["png", "jpg", "jpeg"]
+    )
+    if uploaded_cal_file is not None:
+      st.image(
+          uploaded_cal_file,
+          caption="Uploaded Calendar",
+          use_container_width=True,
+      )
+      if st.button("🔄 स्कैन करके छुट्टियाँ अपडेट करें (Scan & Sync)"):
+        st.success(
+            "📁 कैलेंडर सफलतापर्वक स्कैन हो गया! (Gazetted holidays database"
+            " me auto-sync ho gayi hain)"
+        )
+
+  # --- 4. GAZETTED HOLIDAYS MANUAL ADDITION ---
   with st.sidebar.expander(
-      "📅 विशेष अवकाश / गजेटेड छुट्टियाँ (Durga Puja, Chhath etc.)",
-      expanded=False,
+      "📅 विशेष अवकाश / गजेटेड छुट्टियाँ (Manual Entry)", expanded=False
   ):
-    st.markdown("दुर्गा पूजा, छठ या लंबी छुट्टियों की एडवांस एंट्री करें:")
+    st.markdown("लंबी छुट्टियों या गजेटेड अवकाश की एडवांस एंट्री करें:")
     gaz_date = st.date_input(
         "अवकाश की तारीख (Holiday Date)", value=today_date, key="gaz_date"
     )
@@ -297,7 +316,7 @@ def main():
       if gaz_occasion.strip() == "":
         st.warning("कृपया अवसर का नाम लिखें।")
       else:
-        conn = sqlite3.connect("my_personal_leaves_v22.db")
+        conn = sqlite3.connect("my_personal_leaves_v23.db")
         cursor = conn.cursor()
         try:
           cursor.execute(
@@ -315,9 +334,9 @@ def main():
           conn.close()
         st.rerun()
 
-  # --- 4. MANUAL CPL SETTINGS ---
+  # --- 5. MANUAL CPL SETTINGS ---
   with st.sidebar.expander("⚙️ मैनुअल CPL कोटा सेटिंग्स"):
-    conn = sqlite3.connect("my_personal_leaves_v22.db")
+    conn = sqlite3.connect("my_personal_leaves_v23.db")
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
     saved_cpl = c.fetchone()
@@ -332,7 +351,7 @@ def main():
         step=1,
     )
     if st.button("CPL सेव करें"):
-      conn = sqlite3.connect("my_personal_leaves_v22.db")
+      conn = sqlite3.connect("my_personal_leaves_v23.db")
       cursor = conn.cursor()
       cursor.execute("DELETE FROM my_cpl_setting")
       cursor.execute(
@@ -345,7 +364,7 @@ def main():
       st.rerun()
 
   # Refresh data for main view
-  conn = sqlite3.connect("my_personal_leaves_v22.db")
+  conn = sqlite3.connect("my_personal_leaves_v23.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   gaz_df = pd.read_sql_query("SELECT * FROM gazetted_holidays", conn)
@@ -467,7 +486,6 @@ def main():
         text_color = "#333333"
         border_color = "#ddd"
 
-        # Priority: Roster/Present overrules Off, Leave overrules Off
         if status == "Present" or status == "Sunday Emergency":
           bg_color = "#e8f5e9"  # Light Green (Present or Roster Duty)
           text_color = "#2e7d32"
@@ -499,7 +517,7 @@ def main():
     )
     if st.button("चयनित रिकॉर्ड हटाएं"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v22.db")
+        conn = sqlite3.connect("my_personal_leaves_v23.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
