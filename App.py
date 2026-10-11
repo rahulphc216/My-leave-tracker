@@ -60,7 +60,7 @@ OFFICIAL_HALFDAY_2026 = {
 
 
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v41.db")
+  conn = sqlite3.connect("my_personal_leaves_v42.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -109,13 +109,13 @@ def main():
   )
 
   st.title("🏛️ मेरा लीव और अटेंडेंस ट्रैकर (Patna High Court Rules)")
-  st.markdown("इंटरैक्टिव क्लिकेबल कैलेंडर, सारांश और अटेंडेंस रजिस्टर")
+  st.markdown("मासिक/वार्षिक सारांश, HTML कैलेंडर और अटेंडेंस रजिस्टर")
 
   today_date = date.today()
   today_str = str(today_date)
   is_today_sunday = today_date.weekday() == 6
 
-  conn_h = sqlite3.connect("my_personal_leaves_v41.db")
+  conn_h = sqlite3.connect("my_personal_leaves_v42.db")
   ch = conn_h.cursor()
   ch.execute(
       "SELECT occasion FROM custom_holidays WHERE holiday_date = ?",
@@ -156,7 +156,7 @@ def main():
     d_str_sel = str(att_selected_date)
     is_sunday_selected = att_selected_date.weekday() == 6
 
-    conn_val = sqlite3.connect("my_personal_leaves_v41.db")
+    conn_val = sqlite3.connect("my_personal_leaves_v42.db")
     c_val = conn_val.cursor()
     c_val.execute(
         "SELECT leave_type, reason FROM my_leaves WHERE leave_date = ?",
@@ -261,7 +261,7 @@ def main():
         else:
           status_db = "Absent"
 
-        conn = sqlite3.connect("my_personal_leaves_v41.db")
+        conn = sqlite3.connect("my_personal_leaves_v42.db")
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -275,9 +275,84 @@ def main():
         st.success("✅ Attendance successfully save ho gayi!")
         st.rerun()
 
-  # --- 2. EDIT / DELETE ATTENDANCE REGISTER ---
+  # --- 2. ADVANCED DATE STATUS & DETAILS CHECKER ---
+  with st.sidebar.expander(
+      "🔍 Date Status & Details Checker", expanded=False
+  ):
+    check_date = st.date_input(
+        "Tarik chunein:", value=today_date, key="check_dt"
+    )
+    d_str_chk = str(check_date)
+    chk_weekday = check_date.weekday()
+
+    conn = sqlite3.connect("my_personal_leaves_v42.db")
+    c = conn.cursor()
+    c.execute(
+        "SELECT status, remarks FROM my_attendance WHERE att_date = ?",
+        (d_str_chk,),
+    )
+    att_res = c.fetchone()
+
+    c.execute(
+        "SELECT leave_type, reason FROM my_leaves WHERE leave_date = ?",
+        (d_str_chk,),
+    )
+    leave_res = c.fetchone()
+
+    c.execute(
+        "SELECT occasion FROM custom_holidays WHERE holiday_date = ?",
+        (d_str_chk,),
+    )
+    cust_res = c.fetchone()
+    conn.close()
+
+    is_sun = chk_weekday == 6
+    is_gaz = check_date.year == 2026 and d_str_chk in OFFICIAL_GAZETTED_2026
+    is_cust = cust_res is not None
+    is_half = check_date.year == 2026 and d_str_chk in OFFICIAL_HALFDAY_2026
+
+    if is_sun:
+      day_type_str = "Sunday Off"
+    elif is_cust:
+      day_type_str = (
+          f"Gazetted Holiday ({cust_res[0] if cust_res else 'Custom Off'})"
+      )
+    elif is_gaz:
+      day_type_str = f"Gazetted Holiday ({OFFICIAL_GAZETTED_2026[d_str_chk]})"
+    elif is_half:
+      day_type_str = "Half-Day Office Day"
+    else:
+      day_type_str = "Normal Working Day"
+
+    if leave_res:
+      action_str = f"On Leave ({leave_res[0]}) - Reason: {leave_res[1]}"
+    elif att_res:
+      db_st = att_res[0]
+      if db_st == "Present":
+        if is_sun or is_gaz or is_cust:
+          action_str = f"Present in Roster (Holiday Working) | Remarks: {att_res[1]}"
+        else:
+          action_str = f"Regular Present | Remarks: {att_res[1]}"
+      elif db_st == "Half-Day":
+        action_str = f"Half-Day Present | Remarks: {att_res[1]}"
+      elif db_st == "Absent":
+        action_str = f"Absent | Remarks: {att_res[1]}"
+      elif db_st == "Sunday Off":
+        action_str = "Sunday Off (No Office)"
+      else:
+        action_str = f"{db_st} | Remarks: {att_res[1]}"
+    else:
+      if is_sun or is_gaz or is_cust:
+        action_str = "Off Day (No entry made)"
+      else:
+        action_str = "No attendance entry made yet"
+
+    st.markdown(f"### **📅 {d_str_chk} Report:**")
+    st.info(f"**Base Day Type:** {day_type_str}\n\n**Status:** {action_str}")
+
+  # --- 3. EDIT / DELETE ATTENDANCE REGISTER ---
   with st.sidebar.expander("✏️ पुरानी अटेंडेंस एडिट या सुधार करें"):
-    conn = sqlite3.connect("my_personal_leaves_v41.db")
+    conn = sqlite3.connect("my_personal_leaves_v42.db")
     att_df_all = pd.read_sql_query(
         "SELECT * FROM my_attendance ORDER BY att_date DESC", conn
     )
@@ -312,7 +387,7 @@ def main():
       col_e1, col_e2 = st.columns(2)
       with col_e1:
         if st.button("Update Karein"):
-          conn = sqlite3.connect("my_personal_leaves_v41.db")
+          conn = sqlite3.connect("my_personal_leaves_v42.db")
           cursor = conn.cursor()
           cursor.execute(
               "UPDATE my_attendance SET status = ?, remarks = ? WHERE att_date"
@@ -325,7 +400,7 @@ def main():
           st.rerun()
       with col_e2:
         if st.button("Record Hatayein"):
-          conn = sqlite3.connect("my_personal_leaves_v41.db")
+          conn = sqlite3.connect("my_personal_leaves_v42.db")
           cursor = conn.cursor()
           cursor.execute(
               "DELETE FROM my_attendance WHERE att_date = ?",
@@ -338,11 +413,11 @@ def main():
     else:
       st.info("Abhi koi attendance record nahi hai.")
 
-  # --- 3. ADVANCE / REGULAR LEAVE APPLY ---
+  # --- 4. ADVANCE / REGULAR LEAVE APPLY ---
   with st.sidebar.expander(
       "➕ एडवांस / नई छुट्टी जोड़ें (Apply / Advance Leave)", expanded=False
   ):
-    conn = sqlite3.connect("my_personal_leaves_v41.db")
+    conn = sqlite3.connect("my_personal_leaves_v42.db")
     df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
@@ -396,7 +471,7 @@ def main():
         if error_msg:
           st.error(error_msg)
         else:
-          conn = sqlite3.connect("my_personal_leaves_v41.db")
+          conn = sqlite3.connect("my_personal_leaves_v42.db")
           cursor = conn.cursor()
           cursor.execute(
               """
@@ -423,7 +498,7 @@ def main():
           st.success("✅ छुट्टी दर्ज हो गई और अटेंडेंस में स्वतः अपडेट हो गई!")
           st.rerun()
 
-  # --- 4. QUICK ADD MISSING HOLIDAY ---
+  # --- 5. QUICK ADD MISSING HOLIDAY ---
   with st.sidebar.expander("📌 छूट गई छुट्टी यहाँ जोड़ें (Add Missing Holiday)"):
     missing_date = st.date_input(
         "छुट्टी की तारीख (Date)", value=today_date, key="miss_date"
@@ -432,7 +507,7 @@ def main():
         "अवसर/वजह (जैसे Gazetted Holiday)", value="Gazetted Holiday"
     )
     if st.button("छुट्टी सेव करें", use_container_width=True):
-      conn = sqlite3.connect("my_personal_leaves_v41.db")
+      conn = sqlite3.connect("my_personal_leaves_v42.db")
       cursor = conn.cursor()
       try:
         cursor.execute(
@@ -450,9 +525,9 @@ def main():
         conn.close()
       st.rerun()
 
-  # --- 5. MANUAL CPL SETTINGS ---
+  # --- 6. MANUAL CPL SETTINGS ---
   with st.sidebar.expander("⚙️ मैनुअल CPL कोटा सेटिंग्स"):
-    conn = sqlite3.connect("my_personal_leaves_v41.db")
+    conn = sqlite3.connect("my_personal_leaves_v42.db")
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
     saved_cpl = c.fetchone()
@@ -467,7 +542,7 @@ def main():
         step=1,
     )
     if st.button("CPL सेव करें"):
-      conn = sqlite3.connect("my_personal_leaves_v41.db")
+      conn = sqlite3.connect("my_personal_leaves_v42.db")
       cursor = conn.cursor()
       cursor.execute("DELETE FROM my_cpl_setting")
       cursor.execute(
@@ -480,7 +555,7 @@ def main():
       st.rerun()
 
   # Refresh data for main view
-  conn = sqlite3.connect("my_personal_leaves_v41.db")
+  conn = sqlite3.connect("my_personal_leaves_v42.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   custom_hol_df = pd.read_sql_query("SELECT * FROM custom_holidays", conn)
@@ -605,38 +680,35 @@ def main():
 
   st.markdown("---")
 
-  # --- INTERACTIVE CLICKABLE BUTTON CALENDAR ---
-  st.subheader(
-      "📅 इंटरैक्टिव कैलेंडर व्यू (किसी भी तारीख के बटन पर क्लिक करें)"
-  )
+  # --- Advanced HTML Color-Coded Calendar View (Original Clean Format) ---
+  st.subheader("📅 कैलेंडर व्यू")
 
   c_col1, c_col2 = st.columns(2)
   with c_col1:
-    selected_year = st.selectbox("वर्ष चुनें", [2026, 2027], index=0, key="cal_yr")
+    selected_year = st.selectbox("वर्ष चुनें", [2026, 2027], index=0)
   with c_col2:
     selected_month = st.selectbox(
         "महीना चुनें",
         list(range(1, 13)),
         format_func=lambda x: calendar.month_name[x],
         index=today_date.month - 1,
-        key="cal_mo",
     )
 
   att_dict = {}
   if not att_df.empty:
     for _, row in att_df.iterrows():
-      att_dict[row["att_date"]] = (row["status"], row["remarks"])
+      att_dict[row["att_date"]] = row["status"]
 
-  leave_dict = {}
+  leave_dates_set = set()
   if not df.empty:
     for _, row in df.iterrows():
-      leave_dict[row["leave_date"]] = (row["leave_type"], row["reason"])
+      leave_dates_set.add(row["leave_date"])
 
-  # Color Legend Display
   st.markdown(
       """
-    <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; font-size: 13px; font-weight: bold;">
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; font-size: 13px; font-weight: bold;">
         <span style="color: #2e7d32; background: #e8f5e9; padding: 3px 6px; border-radius: 4px;">🟢 Present / Roster</span>
+        <span style="color: #f57f17; background: #fffde7; padding: 3px 6px; border-radius: 4px;">🟡 Half-Day</span>
         <span style="color: #c62828; background: #ffebee; padding: 3px 6px; border-radius: 4px;">🔴 Leave</span>
         <span style="color: #1565c0; background: #e3f2fd; padding: 3px 6px; border-radius: 4px;">🔵 Sunday / Gazetted Off</span>
         <span style="color: #616161; background: #f5f5f5; padding: 3px 6px; border-radius: 4px;">⚪ Normal</span>
@@ -645,114 +717,83 @@ def main():
       unsafe_allow_html=True,
   )
 
-  # Initialize Session State for Selected Date Inspection
-  if "clicked_date_info" not in st.session_state:
-    st.session_state.clicked_date_info = None
-
   cal_matrix = calendar.monthcalendar(selected_year, selected_month)
   days_header = [
-      "Mon",
-      "Tue",
-      "Wed",
-      "Thu",
-      "Fri",
-      "Sat",
-      "Sun",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday",
   ]
 
-  # Render Days Header using Columns
-  head_cols = st.columns(7)
-  for idx, dh in enumerate(days_header):
-    head_cols[idx].markdown(
-        f"<p style='text-align: center; font-weight: bold; color: #555;'>{dh}</p>",
-        unsafe_allow_html=True,
-    )
+  html_table = (
+      "<table style='width:100%; border-collapse: collapse; text-align: center;"
+      " font-family: sans-serif; font-size: 14px;'>"
+  )
+  html_table += "<tr>"
+  for dh in days_header:
+    html_table += f"<th style='border: 1px solid #ddd; padding: 8px 4px; background-color: #f8f9fa; color: #333; font-size: 12px;'>{dh}</th>"
+  html_table += "</tr>"
 
-  # Render Calendar Matrix with Clickable Buttons
   for week in cal_matrix:
-    row_cols = st.columns(7)
+    html_table += "<tr>"
     for i, day in enumerate(week):
       if day == 0:
-        row_cols[i].markdown("")
+        html_table += (
+            "<td style='border: 1px solid #ddd; padding: 10px;"
+            " background-color: #fafafa;'></td>"
+        )
       else:
         d_str = f"{selected_year}-{selected_month:02d}-{day:02d}"
+        status = att_dict.get(d_str, "")
         is_sunday = i == 6
         is_gazetted = (
             selected_year == 2026 and d_str in OFFICIAL_GAZETTED_2026
         ) or (d_str in custom_hol_dict)
-        
-        att_info = att_dict.get(d_str, None)
-        leave_info = leave_dict.get(d_str, None)
+        is_halfday = selected_year == 2026 and d_str in OFFICIAL_HALFDAY_2026
 
-        # Button Label & Emoji indicators
-        btn_label = f"{day}"
-        if leave_info:
-          btn_label = f"🔴 {day} ({leave_info[0]})"
-        elif att_info:
-          st_val = att_info[0]
-          if st_val == "Present":
-            if is_sunday or is_gazetted:
-              btn_label = f"🟢 {day} (Roster)"
-            else:
-              btn_label = f"🟢 {day} (Pres)"
-          elif st_val == "Half-Day":
-            btn_label = f"🟡 {day} (Half)"
-          elif st_val == "Absent":
-            btn_label = f"❌ {day} (Abst)"
-          elif st_val == "Sunday Off":
-            btn_label = f"🔵 {day} (Off)"
+        bg_color = "#ffffff"
+        text_color = "#333333"
+        border_color = "#ddd"
+        tooltip = ""
+        extra_badge = ""
+
+        if "Leave" in status or d_str in leave_dates_set:
+          bg_color = "#ffebee"
+          text_color = "#c62828"
+          border_color = "#ef9a9a"
+        elif status == "Present" or status == "Sunday Emergency":
+          if is_sunday or is_gazetted:
+            bg_color = "#c8e6c9"
+            text_color = "#1b5e20"
+            border_color = "#2e7d32"
+            extra_badge = (
+                "<br><span style='font-size:10px; background:#2e7d32; color:white;"
+                " padding:1px 3px; border-radius:3px;'>Roster</span>"
+            )
+          else:
+            bg_color = "#e8f5e9"
+            text_color = "#2e7d32"
         elif is_sunday or is_gazetted:
-          btn_label = f"🔵 {day} (Off)"
+          bg_color = "#e3f2fd"
+          text_color = "#1565c0"
+          if d_str in custom_hol_dict:
+            tooltip = f" title='{custom_hol_dict[d_str]}'"
+          elif is_gazetted:
+            tooltip = f" title='{OFFICIAL_GAZETTED_2026[d_str]}'"
+        elif is_halfday or status == "Half-Day":
+          bg_color = "#fffde7"
+          text_color = "#f57f17"
+          if is_halfday:
+            tooltip = f" title='{OFFICIAL_HALFDAY_2026[d_str]}'"
 
-        if row_cols[i].button(btn_label, key=f"btn_{d_str}", use_container_width=True):
-          # Save clicked date info to show status box
-          occ_name = custom_hol_dict.get(d_str, OFFICIAL_GAZETTED_2026.get(d_str, "Sunday Off" if is_sunday else "Working Day"))
-          st.session_state.clicked_date_info = {
-              "date": d_str,
-              "is_sunday": is_sunday,
-              "is_gazetted": is_gazetted,
-              "occasion": occ_name,
-              "attendance": att_info,
-              "leave": leave_info
-          }
+        html_table += f"<td{tooltip} style='border: 2px solid {border_color}; padding: 8px 2px; background-color: {bg_color}; color: {text_color}; font-weight: bold; font-size: 15px;'>{day}{extra_badge}</td>"
+    html_table += "</tr>"
+  html_table += "</table>"
 
-  # Display Clicked Date Details Popup Box below calendar
-  if st.session_state.clicked_date_info:
-    info = st.session_state.clicked_date_info
-    st.markdown("---")
-    st.markdown(f"### 🔍 Selected Date Details: `{info['date']}`")
-    
-    # Base day type description
-    if info['is_sunday']:
-      day_desc = "Sunday Off"
-    elif info['is_gazetted']:
-      day_desc = f"Gazetted Holiday ({info['occasion']})"
-    else:
-      day_desc = "Normal Working Day"
-
-    # Action / Status description
-    if info['leave']:
-      action_desc = f"On Leave ({info['leave'][0]}) | Reason: {info['leave'][1]}"
-    elif info['attendance']:
-      db_st = info['attendance'][0]
-      rem = info['attendance'][1]
-      if db_st == "Present":
-        if info['is_sunday'] or info['is_gazetted']:
-          action_desc = f"Present in Roster (Holiday Working) | Remarks: {rem}"
-        else:
-          action_desc = f"Regular Present | Remarks: {rem}"
-      else:
-        action_desc = f"{db_st} | Remarks: {rem}"
-    else:
-      if info['is_sunday'] or info['is_gazetted']:
-        action_desc = "Off Day (No entry made)"
-      else:
-        action_desc = "No attendance entry made yet"
-
-    st.info(f"**Base Day Type:** {day_desc}\n\n**Status:** {action_desc}")
-    if st.button("Close Details"):
-      st.session_state.clicked_date_info = None
-      st.rerun()
+  st.markdown(html_table, unsafe_allow_html=True)
 
   # --- History & Delete ---
   st.markdown("---")
@@ -765,7 +806,7 @@ def main():
     )
     if st.button("चयनित रिकॉर्ड हटाएं"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v41.db")
+        conn = sqlite3.connect("my_personal_leaves_v42.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
