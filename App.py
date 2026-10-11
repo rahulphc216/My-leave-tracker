@@ -22,7 +22,7 @@ OFFICIAL_RH = {
 
 
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v17.db")
+  conn = sqlite3.connect("my_personal_leaves_v18.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -67,7 +67,7 @@ def main():
 
   # --- 1. Advanced Settings Expander (CPL) ---
   with st.sidebar.expander("⚙️ Advanced Settings (CPL Quota Setup)"):
-    conn = sqlite3.connect("my_personal_leaves_v17.db")
+    conn = sqlite3.connect("my_personal_leaves_v18.db")
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
     saved_cpl = c.fetchone()
@@ -83,7 +83,7 @@ def main():
     )
 
     if st.button("CPL Quota Save Karein"):
-      conn = sqlite3.connect("my_personal_leaves_v17.db")
+      conn = sqlite3.connect("my_personal_leaves_v18.db")
       cursor = conn.cursor()
       cursor.execute("DELETE FROM my_cpl_setting")
       cursor.execute(
@@ -95,7 +95,7 @@ def main():
       st.success("✅ CPL quota save ho gaya!")
       st.rerun()
 
-  conn = sqlite3.connect("my_personal_leaves_v17.db")
+  conn = sqlite3.connect("my_personal_leaves_v18.db")
   c = conn.cursor()
   c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
   saved_cpl = c.fetchone()
@@ -119,7 +119,7 @@ def main():
 
     is_sunday_selected = att_selected_date.weekday() == 6
 
-    conn = sqlite3.connect("my_personal_leaves_v17.db")
+    conn = sqlite3.connect("my_personal_leaves_v18.db")
     c = conn.cursor()
     c.execute(
         "SELECT status, remarks FROM my_attendance WHERE att_date = ?",
@@ -175,7 +175,7 @@ def main():
       else:
         status_db = "Absent"
 
-      conn = sqlite3.connect("my_personal_leaves_v17.db")
+      conn = sqlite3.connect("my_personal_leaves_v18.db")
       cursor = conn.cursor()
       cursor.execute(
           """
@@ -189,10 +189,9 @@ def main():
       st.success("✅ Upasthiti safaltapoorvak save ho gayi!")
       st.rerun()
 
-  # --- 4. Apply Leave Expander (Hidden by default) ---
+  # --- 4. Apply Leave Expander ---
   with st.sidebar.expander("➕ Nayi Chhutti Jodein (Apply Leave)", expanded=False):
-    # Data Fetch inside expander
-    conn = sqlite3.connect("my_personal_leaves_v17.db")
+    conn = sqlite3.connect("my_personal_leaves_v18.db")
     df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
     conn.close()
 
@@ -275,7 +274,7 @@ def main():
         if error_msg:
           st.error(error_msg)
         else:
-          conn = sqlite3.connect("my_personal_leaves_v17.db")
+          conn = sqlite3.connect("my_personal_leaves_v18.db")
           cursor = conn.cursor()
           cursor.execute(
               """
@@ -305,7 +304,7 @@ def main():
           st.rerun()
 
   # Refresh data for main view
-  conn = sqlite3.connect("my_personal_leaves_v17.db")
+  conn = sqlite3.connect("my_personal_leaves_v18.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   conn.close()
@@ -342,10 +341,10 @@ def main():
 
   st.markdown("---")
 
-  # --- Advanced HTML Color-Coded Calendar View ---
+  # --- Advanced HTML Color-Coded Calendar View (Compact & Capital Day Names) ---
   st.subheader("📅 Calendar View")
 
-  c_col1, c_col2 = st.columns(2)
+  c_col1, c_col2 = st.express = st.columns(2)
   with c_col1:
     selected_year = st.selectbox("Varsh chunein", [2026, 2027], index=0)
   with c_col2:
@@ -369,28 +368,36 @@ def main():
   # Color Legend Display
   st.markdown(
       """
-    <div style="display: flex; gap: 15px; margin-bottom: 15px; font-size: 14px; font-weight: bold;">
-        <span style="color: #2e7d32; background: #e8f5e9; padding: 4px 8px; border-radius: 4px;">🟢 Present</span>
-        <span style="color: #f57f17; background: #fffde7; padding: 4px 8px; border-radius: 4px;">🟡 Half-Day</span>
-        <span style="color: #c62828; background: #ffebee; padding: 4px 8px; border-radius: 4px;">🔴 Leave</span>
-        <span style="color: #1565c0; background: #e3f2fd; padding: 4px 8px; border-radius: 4px;">🔵 Sunday (Off)</span>
-        <span style="color: #616161; background: #f5f5f5; padding: 4px 8px; border-radius: 4px;">⚪ Normal</span>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; font-size: 13px; font-weight: bold;">
+        <span style="color: #2e7d32; background: #e8f5e9; padding: 3px 6px; border-radius: 4px;">🟢 Present</span>
+        <span style="color: #f57f17; background: #fffde7; padding: 3px 6px; border-radius: 4px;">🟡 Half-Day</span>
+        <span style="color: #c62828; background: #ffebee; padding: 3px 6px; border-radius: 4px;">🔴 Leave</span>
+        <span style="color: #1565c0; background: #e3f2fd; padding: 3px 6px; border-radius: 4px;">🔵 Sunday</span>
+        <span style="color: #616161; background: #f5f5f5; padding: 3px 6px; border-radius: 4px;">⚪ Normal</span>
     </div>
     """,
       unsafe_allow_html=True,
   )
 
-  # Generating HTML Calendar Grid
+  # Calendar Grid with Capitalized Day Headers & Compact Cells for Mobile
   cal_matrix = calendar.monthcalendar(selected_year, selected_month)
-  days_header = ["Som", "Mangal", "Budh", "Guru", "Shukra", "Shani", "Ravi"]
+  days_header = [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday",
+  ]
 
   html_table = (
       "<table style='width:100%; border-collapse: collapse; text-align: center;"
-      " font-family: sans-serif;'>"
+      " font-family: sans-serif; font-size: 14px;'>"
   )
   html_table += "<tr>"
   for dh in days_header:
-    html_table += f"<th style='border: 1px solid #ddd; padding: 10px; background-color: #f8f9fa; color: #333;'>{dh}</th>"
+    html_table += f"<th style='border: 1px solid #ddd; padding: 8px 4px; background-color: #f8f9fa; color: #333; font-size: 12px;'>{dh}</th>"
   html_table += "</tr>"
 
   for week in cal_matrix:
@@ -398,33 +405,32 @@ def main():
     for i, day in enumerate(week):
       if day == 0:
         html_table += (
-            "<td style='border: 1px solid #ddd; padding: 15px; background-color:"
-            " #fafafa;'></td>"
+            "<td style='border: 1px solid #ddd; padding: 10px;"
+            " background-color: #fafafa;'></td>"
         )
       else:
         d_str = f"{selected_year}-{selected_month:02d}-{day:02d}"
         status = att_dict.get(d_str, "")
         is_sunday = i == 6
 
-        # Default style (Normal)
         bg_color = "#ffffff"
         text_color = "#333333"
         border_color = "#ddd"
 
         if d_str in leave_dates_set or "Leave" in status:
           bg_color = "#ffebee"  # Light Red
-          text_color = "#c62828"  # Dark Red
+          text_color = "#c62828"
         elif is_sunday and status != "Present":
           bg_color = "#e3f2fd"  # Light Blue
-          text_color = "#1565c0"  # Dark Blue
+          text_color = "#1565c0"
         elif status == "Present" or status == "Sunday Emergency":
           bg_color = "#e8f5e9"  # Light Green
-          text_color = "#2e7d32"  # Dark Green
+          text_color = "#2e7d32"
         elif status == "Half-Day":
           bg_color = "#fffde7"  # Light Yellow
-          text_color = "#f57f17"  # Dark Yellow/Orange
+          text_color = "#f57f17"
 
-        html_table += f"<td style='border: 1px solid {border_color}; padding: 15px; background-color: {bg_color}; color: {text_color}; font-weight: bold; font-size: 16px;'>{day}</td>"
+        html_table += f"<td style='border: 1px solid {border_color}; padding: 10px 4px; background-color: {bg_color}; color: {text_color}; font-weight: bold; font-size: 15px;'>{day}</td>"
     html_table += "</tr>"
   html_table += "</table>"
 
@@ -441,7 +447,7 @@ def main():
     )
     if st.button("Chayanit Record Hatayein"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v17.db")
+        conn = sqlite3.connect("my_personal_leaves_v18.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
