@@ -3,10 +3,23 @@ import pandas as pd
 import sqlite3
 import streamlit as st
 
+# Patna High Court 2026 Official Restricted Holidays (RH) List
+OFFICIAL_RH_2026 = {
+    "Jan 16 - Guru Gobind Singh Ji's Birthday": "2026-01-16",
+    "Jan 26 - Shab-e-Barat": "2026-01-26",
+    "Feb 15 - Maha Shivaratri": "2026-02-15",
+    "Mar 04 - Holika Dahan": "2026-03-04",
+    "Apr 03 - Good Friday (Extra/Spec)": "2026-04-03",
+    "Apr 14 - Mahavir Jayanti": "2026-04-14",
+    "May 15 - Buddha Purnima": "2026-05-15",
+    "Aug 28 - Muharram": "2026-08-28",
+    "Oct 20 - Karwa Chauth": "2026-10-20",
+}
+
 
 # डेटाबेस सेटअप
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v3.db")
+  conn = sqlite3.connect("my_personal_leaves_v4.db")
   cursor = conn.cursor()
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS my_leaves (
@@ -29,12 +42,10 @@ def main():
   )
 
   st.title("🏛️ मेरा लीव और अटेंडेंस ट्रैकर (Patna High Court Rules)")
-  st.markdown("नियम-बद्ध व्यक्तिगत लीव डैशबोर्ड")
+  st.markdown("कैलेंडर और नियम आधारित स्मार्ट लीव डैशबोर्ड")
 
   # --- साइडबार: ओपनिंग बैलेंस / कोटा सेट करने के लिए ---
-  st.sidebar.header("⚙️ लीव कोटा और ओपनिंग सेटिंग्स")
-
-  # CPL का साल भर का कुल कोटा मैन्युअल रूप से सेट करने के लिए
+  st.sidebar.header("⚙️ लीव कोटा सेटिंग्स")
   total_cpl_allocated = st.sidebar.number_input(
       "इस साल कुल मान्य CPL (Total Applicable CPL)",
       min_value=0,
@@ -46,31 +57,27 @@ def main():
   st.sidebar.markdown("---")
   st.sidebar.header("➕ नई छुट्टी जोड़ें (Apply Leave)")
 
-  # डेटा फेच करना ताकि तुरंत कैलकुलेशन हो सके
-  conn = sqlite3.connect("my_personal_leaves_v3.db")
+  # डेटा फेच करना
+  conn = sqlite3.connect("my_personal_leaves_v4.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   conn.close()
 
-  # अब तक ली गई कुल छुट्टियाँ निकालना (Only Integers)
+  # अब तक ली गई कुल छुट्टियाँ निकालना
   cl_taken = (
-      df[df["leave_type"].str.startswith("CL")]["days_count"].sum()
-      if not df.empty
-      else 0
+      df[df["leave_type"] == "CL"]["days_count"].sum() if not df.empty else 0
   )
   cpl_taken = (
-      df[df["leave_type"].str.startswith("CPL")]["days_count"].sum()
-      if not df.empty
-      else 0
+      df[df["leave_type"] == "CPL"]["days_count"].sum() if not df.empty else 0
   )
   el_taken = (
-      df[df["leave_type"].str.startswith("EL")]["days_count"].sum()
-      if not df.empty
-      else 0
+      df[df["leave_type"] == "EL"]["days_count"].sum() if not df.empty else 0
   )
-  rh_taken = (
-      df[df["leave_type"].str.startswith("RH")]["days_count"].sum()
-      if not df.empty
-      else 0
+
+  # RH records check
+  rh_df = df[df["leave_type"] == "RH"] if not df.empty else pd.DataFrame()
+  rh_taken = rh_df["days_count"].sum() if not rh_df.empty else 0
+  already_taken_rh_dates = (
+      rh_df["leave_date"].tolist() if not rh_df.empty else []
   )
 
   # वर्तमान शेष बैलेंस
@@ -78,61 +85,82 @@ def main():
   cpl_remaining = total_cpl_allocated - cpl_taken
   rh_remaining = 2 - rh_taken
 
+  # डायनेमिक RH लिस्ट फ़िल्टर करना (जो ले ली गई हैं या जिनकी तारीख निकल चुकी है, उन्हें हटाना)
+  available_rh_options = {}
+  for rh_name, rh_date in OFFICIAL_RH_2026.items():
+    if rh_date not in already_taken_rh_dates:
+      available_rh_options[rh_name] = rh_date
+
   with st.sidebar.form("leave_form"):
-    leave_type = st.selectbox(
+    leave_category = st.selectbox(
         "छुट्टी का प्रकार (Leave Type)",
-        [
-            f"CL (Casual Leave - शेष: {cl_remaining})",
-            f"CPL (Compensatory Leave - शेष: {cpl_remaining})",
-            "EL (Earned Leave - Base 33)",
-            f"RH (Restricted Holiday - शेष: {rh_remaining})",
-            "Late Coming",
-        ],
+        ["CL", "CPL", "EL", "RH", "Late Coming"],
     )
 
-    leave_date = st.date_input("छुट्टी की तारीख (Date)")
+    # अगर RH चुना गया है तो सिर्फ कैलेंडर की ऑफिशियल लिस्ट दिखेगी
+    if leave_category == "RH":
+      if rh_remaining <= 0:
+        st.warning("⚠️ आपने इस साल की दोनों (2) RH पहले ही पूरी कर ली हैं!")
+        selected_rh_key = None
+        leave_date = datetime.today().date()
+      elif not available_rh_options:
+        st.info("सभी उपलब्ध Restricted Holidays समाप्त हो चुकी हैं।")
+        selected_rh_key = None
+        leave_date = datetime.today().date()
+      else:
+        selected_rh_key = st.selectbox(
+            "ऑफिशियल कैलेंडर से RH चुनें:", list(available_rh_options.keys())
+        )
+        leave_date = (
+            datetime.strptime(
+                available_rh_options[selected_rh_key], "%Y-%m-%d"
+            ).date()
+            if selected_rh_key
+            else datetime.today().date()
+        )
+    else:
+      leave_date = st.date_input("छुट्टी की तारीख (Date)")
 
-    # सिर्फ पूरे अंकों (Integers) में दिनों की संख्या
-    days_count = st.number_input(
-        "दिनों की संख्या (Days - Full Numbers Only)",
-        min_value=1,
-        max_value=30,
-        value=1,
-        step=1,
-    )
+    # दिनों की संख्या (Integers only)
+    if leave_category == "RH":
+      days_count = 1  # RH hamesha 1 din ki hoti hai
+      st.info("ℹ️ Restricted Holiday (RH) स्वतः 1 दिन की दर्ज होगी।")
+    else:
+      days_count = st.number_input(
+          "दिनों की संख्या (Full Days)",
+          min_value=1,
+          max_value=30,
+          value=1,
+          step=1,
+      )
 
     reason = st.text_area("वजह / टिप्पणी (Optional)")
     submit = st.form_submit_button("रिकॉर्ड सेव करें")
 
     if submit:
-      # Validation Checks
       error_msg = None
-      clean_leave_type = leave_type.split(" ")[
-          0
-      ]  # सिर्फ CL, CPL, EL, RH निकालना
 
-      if clean_leave_type == "CL":
+      if leave_category == "CL":
         if days_count > cl_remaining:
           error_msg = (
-              f"❌ त्रुटि: आपके पास केवल {cl_remaining} CL बची है! आप इससे"
-              " ज़्यादा आवेदन नहीं कर सकते।"
+              f"❌ त्रुटि: आपके पास केवल {cl_remaining} CL बची है! इससे ज़्यादा"
+              " अनुमति नहीं है।"
           )
-      elif clean_leave_type == "CPL":
+      elif leave_category == "CPL":
         if days_count > cpl_remaining:
           error_msg = (
-              f"❌ त्रुटि: आपके पास केवल {cpl_remaining} CPL बची है! कृपया"
-              " सही संख्या दर्ज करें।"
+              f"❌ त्रुटि: आपके पास केवल {cpl_remaining} CPL बची है!"
           )
-      elif clean_leave_type == "RH":
-        if rh_taken + days_count > 2:
-          error_msg = (
-              "❌ त्रुटि: आप साल भर में अधिकतम केवल 2 ही RH ले सकते हैं!"
-          )
+      elif leave_category == "RH":
+        if rh_remaining <= 0:
+          error_msg = "❌ त्रुटि: आप साल भर में अधिकतम केवल 2 ही RH ले सकते हैं!"
+        elif not selected_rh_key:
+          error_msg = "❌ कृपया मान्य RH चुनें।"
 
       if error_msg:
         st.sidebar.error(error_msg)
       else:
-        conn = sqlite3.connect("my_personal_leaves_v3.db")
+        conn = sqlite3.connect("my_personal_leaves_v4.db")
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -140,7 +168,7 @@ def main():
                     VALUES (?, ?, ?, ?, ?)
                 """,
             (
-                clean_leave_type,
+                leave_category,
                 str(leave_date),
                 days_count,
                 reason,
@@ -152,33 +180,46 @@ def main():
         st.sidebar.success("✅ आपकी छुट्टी का रिकॉर्ड सफलतापर्वक दर्ज हो गया!")
         st.rerun()
 
-  # --- डैशबोर्ड और मेट्रिक्स ---
+  # --- डैशबोर्ड और डिटेल्ड समरी ---
   st.subheader("📊 वार्षिक लीव बैलेंस और स्थिति (Leave Quota Summary)")
   col1, col2, col3, col4 = st.columns(4)
 
   with col1:
     st.metric(
         "CL (Casual Leave)",
-        f"खर्च: {cl_taken}",
-        f"शेष: {cl_remaining} (मैक्स 16)",
+        f"खर्च: {cl_taken} दिन",
+        f"शेष: {cl_remaining} दिन (मैक्स 16)",
     )
   with col2:
     st.metric(
         "CPL (Compensatory)",
-        f"खर्च: {cpl_taken}",
-        f"शेष: {cpl_remaining} (कुल: {total_cpl_allocated})",
+        f"खर्च: {cpl_taken} दिन",
+        f"शेष: {cpl_remaining} दिन (कुल: {total_cpl_allocated})",
     )
   with col3:
     el_balance = 33 - el_taken
     st.metric(
-        "EL (Earned Leave)", f"खर्च: {el_taken}", f"बैलेंस/कैरी-फॉरवर्ड: {el_balance}"
+        "EL (Earned Leave)",
+        f"खर्च: {el_taken} दिन",
+        f"बैलेंस/कैरी-फॉरवर्ड: {el_balance} दिन",
     )
   with col4:
     st.metric(
-        "RH (Restricted)", f"खर्च: {rh_taken}", f"शेष: {rh_remaining} (मैक्स 2)"
+        "RH (Restricted)",
+        f"खर्च: {rh_taken} दिन",
+        f"शेष: {rh_remaining} दिन (मैक्स 2)",
     )
 
+  # --- फुल डिटेल समरी बॉक्स (Full Detail Breakdown) ---
   st.markdown("---")
+  st.info(
+      f"📌 **विस्तृत विवरण (Full Detail Summary - 2026):**\n"
+      f"- इस कलैंडर वर्ष में अब तक आपने कुल **{cl_taken} दिन** Casual Leave (CL) का उपयोग किया है।\n"
+      f"- कुल **{cpl_taken} दिन** Compensatory Leave (CPL) खर्च की गई है।\n"
+      f"- कुल **{el_taken} दिन** Earned Leave (EL) ली गई है।\n"
+      f"- कुल **{rh_taken} दिन** Restricted Holiday (RH) अवमुक्त की गई है।"
+  )
+
   st.subheader("📋 सभी लीव रिकॉर्ड्स (History)")
 
   if not df.empty:
@@ -191,7 +232,7 @@ def main():
     )
     if st.button("चयनित रिकॉर्ड हटाएं"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v3.db")
+        conn = sqlite3.connect("my_personal_leaves_v4.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
