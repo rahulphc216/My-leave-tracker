@@ -65,6 +65,8 @@ def main():
               leave_type,
               str(leave_date),
               days_count,
+              reason,
+              str(datetime.now().strftime("%Y-%m-%d %H:%M")),
           ),
       )
       conn.commit()
@@ -72,77 +74,110 @@ def main():
       st.sidebar.success("✅ आपकी छुट्टी का रिकॉर्ड सफलतापर्वक दर्ज हो गया!")
       st.rerun()
 
+  # --- नया सेक्शन: पुरानी/अक्टूबर से पहले ली गई छुट्टियाँ सेट करने के लिए ---
+  st.sidebar.markdown("---")
+  st.sidebar.subheader("⚙️ Purani Chhuttiyan (Opening Balance)")
+  st.sidebar.markdown(
+      "Agar October se pehle kuch chhutti use ki hain, toh yahan enter karein:"
+  )
+
+  past_cl = st.sidebar.number_input(
+      "Pehle li gayi total CL", min_value=0.0, max_value=16.0, value=0.0, step=0.5
+  )
+  past_el = st.sidebar.number_input(
+      "Pehle li gayi total EL", min_value=0.0, max_value=100.0, value=0.0, step=0.5
+  )
+  past_rh = st.sidebar.number_input(
+      "Pehle li gayi total RH", min_value=0.0, max_value=2.0, value=0.0, step=1.0
+  )
+
   # डेटा फेच करना
   conn = sqlite3.connect("my_personal_leaves_v2.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   conn.close()
 
-  # अलग-अलग छुट्टियों का कुल योग निकालना
-  cl_taken = (
+  # ऐप के अंदर दर्ज की गई छुट्टियाँ + पुरानी छुट्टियाँ जोड़ना
+  app_cl = (
       df[df["leave_type"].str.startswith("CL")]["days_count"].sum()
       if not df.empty
       else 0
   )
-  cpl_taken = (
+  app_cpl = (
       df[df["leave_type"].str.startswith("CPL")]["days_count"].sum()
       if not df.empty
       else 0
   )
-  el_taken = (
+  app_el = (
       df[df["leave_type"].str.startswith("EL")]["days_count"].sum()
       if not df.empty
       else 0
   )
-  rh_taken = (
+  app_rh = (
       df[df["leave_type"].str.startswith("RH")]["days_count"].sum()
       if not df.empty
       else 0
   )
+
+  total_cl_taken = app_cl + past_cl
+  total_el_taken = app_el + past_el
+  total_rh_taken = app_rh + past_rh
+  total_cpl_taken = app_cpl  # CPL flexible hota hai
 
   # मेट्रिक्स और बैलेंस दिखाना
   st.subheader("📊 वार्षिक लीव बैलेंस और स्थिति (Leave Quota Summary)")
   col1, col2, col3, col4 = st.columns(4)
 
   with col1:
-    cl_balance = 16 - cl_taken
+    cl_balance = 16 - total_cl_taken
     st.metric(
         "CL (Casual Leave)",
-        f"खर्च: {cl_taken}",
-        f"शेष: {cl_balance} (मैक्स 16)",
+        f"Kul Kharch: {total_cl_taken}",
+        f"Shesh: {cl_balance} (Max 16)",
     )
   with col2:
     st.metric(
-        "CPL (Compensatory)", f"कुल ली गई: {cpl_taken}", "1 साल की वैधता"
+        "CPL (Compensatory)", f"Kul Li Gai: {total_cpl_taken}", "1 Saal Validity"
     )
   with col3:
-    el_balance = 33 - el_taken
-    st.metric("EL (Earned Leave)", f"खर्च: {el_taken}", f"बचत/बैलेंस: {el_balance}")
+    el_balance = 33 - total_el_taken
+    st.metric(
+        "EL (Earned Leave)",
+        f"Kul Kharch: {total_el_taken}",
+        f"Balance: {el_balance}",
+    )
   with col4:
-    rh_balance = 2 - rh_taken
-    st.metric("RH (Restricted)", f"खर्च: {rh_taken}", f"शेष: {rh_balance} (मैक्स 2)")
+    rh_balance = 2 - total_rh_taken
+    st.metric(
+        "RH (Restricted)",
+        f"Kul Kharch: {total_rh_taken}",
+        f"Shesh: {rh_balance} (Max 2)",
+    )
 
   st.markdown("---")
-  st.subheader("📋 सभी लीव रिकॉर्ड्स (History)")
+  st.subheader("📋 Sabhi App Entries (History)")
 
   if not df.empty:
     st.dataframe(df, use_container_width=True)
 
     # रिकॉर्ड हटाने का विकल्प
-    st.markdown("### ⚙️ रिकॉर्ड प्रबंधित करें")
+    st.markdown("### ⚙️ Record Mitayein (Delete)")
     del_id = st.number_input(
-        "हटाने के लिए रिकॉर्ड ID दर्ज करें", min_value=0, step=1
+        "Hatane ke liye Record ID darj karein", min_value=0, step=1
     )
-    if st.button("चयनित रिकॉर्ड हटाएं"):
+    if st.button("Chayanit Record Hatayein"):
       if del_id > 0:
         conn = sqlite3.connect("my_personal_leaves_v2.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
         conn.close()
-        st.success(f"ID {del_id} का रिकॉर्ड हटा दिया गया है!")
+        st.success(f"ID {del_id} ka record hata diya gaya hai!")
         st.rerun()
   else:
-    st.info("अभी तक कोई रिकॉर्ड दर्ज नहीं किया गया है।")
+    st.info(
+        "Abhi app mein koi entry nahi hai. Sidebar se purani ya nayi entry"
+        " set kar sakte hain."
+    )
 
 
 if __name__ == "__main__":
