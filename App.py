@@ -4,7 +4,7 @@ import pandas as pd
 import sqlite3
 import streamlit as st
 
-# Patna High Court 2026 Official Gazetted Holidays & Half-Day Office Dates
+# Patna High Court 2026 Comprehensive Gazetted Holidays List (Official Red-Letter Days)
 OFFICIAL_GAZETTED_2026 = {
     "2026-01-14": "Makar Sankranti",
     "2026-01-26": "Republic Day",
@@ -22,12 +22,16 @@ OFFICIAL_GAZETTED_2026 = {
     "2026-09-04": "Janmashtami",
     "2026-09-17": "Vishwakarma Puja",
     "2026-10-02": "Mahatma Gandhi Birthday",
-    # Durga Puja & Long Vacation / Gazetted Holidays 2026 (Example standard dates)
+    # Durga Puja & October Long Vacation 2026
     "2026-10-18": "Durga Puja (Saptami)",
     "2026-10-19": "Durga Puja (Ashtami)",
     "2026-10-20": "Durga Puja (Navami)",
-    "2026-10-21": "Durga Puja (Dashami / Vijaya Dashami)",
+    "2026-10-21": "Durga Puja (Dashami)",
+    "2026-10-22": "Durga Puja Vacation",
+    "2026-10-23": "Durga Puja Vacation",
+    "2026-10-24": "Durga Puja Vacation",
     "2026-10-26": "Lakhshmi Puja",
+    # Diwali & Chhath Puja 2026
     "2026-11-08": "Diwali",
     "2026-11-09": "Chitragupta Puja / Govardhan Puja",
     "2026-11-10": "Chhath Puja (Day 1)",
@@ -35,7 +39,7 @@ OFFICIAL_GAZETTED_2026 = {
     "2026-12-25": "Christmas Day",
 }
 
-# Patna High Court 2026 Official Half-Day Office Dates (Two colors / Special days)
+# Patna High Court 2026 Half-Day Office Dates (Two colors / Half-day working)
 OFFICIAL_HALFDAY_2026 = {
     "2026-03-02": "Holi Eve Half-Day",
     "2026-11-07": "Diwali Eve Half-Day",
@@ -44,7 +48,7 @@ OFFICIAL_HALFDAY_2026 = {
 
 
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v25.db")
+  conn = sqlite3.connect("my_personal_leaves_v27.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -85,7 +89,7 @@ def main():
   )
 
   st.title("🏛️ मेरा लीव और अटेंडेंस ट्रैकर (Patna High Court Rules)")
-  st.markdown("ऑटो-अपडेटेड गजेटेड छुट्टियाँ, रोस्टर और स्मार्ट डैशबोर्ड")
+  st.markdown("ऑटो-सिंक्रनाइज्ड कैलेंडर, रोस्टर और स्मार्ट डैशबोर्ड")
 
   # --- 1. PROMINENT ATTENDANCE & ROSTER REGISTER (Sidebar Top) ---
   with st.sidebar.expander(
@@ -99,7 +103,7 @@ def main():
 
     is_sunday_selected = att_selected_date.weekday() == 6
 
-    conn = sqlite3.connect("my_personal_leaves_v25.db")
+    conn = sqlite3.connect("my_personal_leaves_v27.db")
     c = conn.cursor()
     c.execute(
         "SELECT status, remarks FROM my_attendance WHERE att_date = ?",
@@ -161,7 +165,7 @@ def main():
       else:
         status_db = "Absent"
 
-      conn = sqlite3.connect("my_personal_leaves_v25.db")
+      conn = sqlite3.connect("my_personal_leaves_v27.db")
       cursor = conn.cursor()
       cursor.execute(
           """
@@ -179,7 +183,7 @@ def main():
   with st.sidebar.expander(
       "➕ एडवांस / नई छुट्टी जोड़ें (Apply / Advance Leave)", expanded=False
   ):
-    conn = sqlite3.connect("my_personal_leaves_v25.db")
+    conn = sqlite3.connect("my_personal_leaves_v27.db")
     df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
@@ -236,7 +240,7 @@ def main():
         if error_msg:
           st.error(error_msg)
         else:
-          conn = sqlite3.connect("my_personal_leaves_v25.db")
+          conn = sqlite3.connect("my_personal_leaves_v27.db")
           cursor = conn.cursor()
           cursor.execute(
               """
@@ -265,7 +269,7 @@ def main():
 
   # --- 3. MANUAL CPL SETTINGS ---
   with st.sidebar.expander("⚙️ मैनुअल CPL कोटा सेटिंग्स"):
-    conn = sqlite3.connect("my_personal_leaves_v25.db")
+    conn = sqlite3.connect("my_personal_leaves_v27.db")
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
     saved_cpl = c.fetchone()
@@ -280,7 +284,7 @@ def main():
         step=1,
     )
     if st.button("CPL सेव करें"):
-      conn = sqlite3.connect("my_personal_leaves_v25.db")
+      conn = sqlite3.connect("my_personal_leaves_v27.db")
       cursor = conn.cursor()
       cursor.execute("DELETE FROM my_cpl_setting")
       cursor.execute(
@@ -293,7 +297,7 @@ def main():
       st.rerun()
 
   # Refresh data for main view
-  conn = sqlite3.connect("my_personal_leaves_v25.db")
+  conn = sqlite3.connect("my_personal_leaves_v27.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   c = conn.cursor()
@@ -413,7 +417,7 @@ def main():
         border_color = "#ddd"
         tooltip = ""
 
-        # Priority rules for colors
+        # Priority rules: Present/Roster > Leave > Sunday/Gazetted Off > Half-Day > Normal
         if status == "Present" or status == "Sunday Emergency":
           bg_color = "#e8f5e9"  # Light Green (Present or Roster Duty)
           text_color = "#2e7d32"
@@ -448,7 +452,7 @@ def main():
     )
     if st.button("चयनित रिकॉर्ड हटाएं"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v25.db")
+        conn = sqlite3.connect("my_personal_leaves_v27.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
