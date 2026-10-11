@@ -22,7 +22,7 @@ OFFICIAL_RH = {
 
 
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v19.db")
+  conn = sqlite3.connect("my_personal_leaves_v20.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -77,7 +77,7 @@ def main():
 
     is_sunday_selected = att_selected_date.weekday() == 6
 
-    conn = sqlite3.connect("my_personal_leaves_v19.db")
+    conn = sqlite3.connect("my_personal_leaves_v20.db")
     c = conn.cursor()
     c.execute(
         "SELECT status, remarks FROM my_attendance WHERE att_date = ?",
@@ -135,7 +135,7 @@ def main():
       else:
         status_db = "Absent"
 
-      conn = sqlite3.connect("my_personal_leaves_v19.db")
+      conn = sqlite3.connect("my_personal_leaves_v20.db")
       cursor = conn.cursor()
       cursor.execute(
           """
@@ -149,10 +149,11 @@ def main():
       st.success("✅ उपस्थिति सफलतापूर्वक दर्ज हो गई!")
       st.rerun()
 
-  # --- 2. Other Small Expander Settings (Hidden below) ---
+  # --- 2. Other Expander Settings ---
   with st.sidebar.expander("➕ नई छुट्टी जोड़ें (Apply Leave)", expanded=False):
-    conn = sqlite3.connect("my_personal_leaves_v19.db")
+    conn = sqlite3.connect("my_personal_leaves_v20.db")
     df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
+    c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
     saved_cpl = c.fetchone()
     active_cpl_quota = saved_cpl[0] if saved_cpl else 0
@@ -236,7 +237,7 @@ def main():
         if error_msg:
           st.error(error_msg)
         else:
-          conn = sqlite3.connect("my_personal_leaves_v19.db")
+          conn = sqlite3.connect("my_personal_leaves_v20.db")
           cursor = conn.cursor()
           cursor.execute(
               """
@@ -264,7 +265,7 @@ def main():
           st.rerun()
 
   with st.sidebar.expander("⚙️ CPL कोटा सेटिंग्स"):
-    conn = sqlite3.connect("my_personal_leaves_v19.db")
+    conn = sqlite3.connect("my_personal_leaves_v20.db")
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
     saved_cpl = c.fetchone()
@@ -275,7 +276,7 @@ def main():
         "कुल मान्य CPL", min_value=0, max_value=50, value=default_cpl, step=1
     )
     if st.button("CPL सेव करें"):
-      conn = sqlite3.connect("my_personal_leaves_v19.db")
+      conn = sqlite3.connect("my_personal_leaves_v20.db")
       cursor = conn.cursor()
       cursor.execute("DELETE FROM my_cpl_setting")
       cursor.execute(
@@ -291,7 +292,7 @@ def main():
     st.file_uploader("कैलेंडर इमेज/PDF अपलोड करें", type=["png", "jpg", "pdf"])
 
   # Refresh data for main view
-  conn = sqlite3.connect("my_personal_leaves_v19.db")
+  conn = sqlite3.connect("my_personal_leaves_v20.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   c = conn.cursor()
@@ -436,7 +437,7 @@ def main():
     )
     if st.button("चयनित रिकॉर्ड हटाएं"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v19.db")
+        conn = sqlite3.connect("my_personal_leaves_v20.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
