@@ -19,7 +19,7 @@ OFFICIAL_RH_2026 = {
 
 
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v10.db")
+  conn = sqlite3.connect("my_personal_leaves_v11.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -41,7 +41,6 @@ def init_db():
         )
     """)
 
-  # CPL ke liye alag table taaki ek baar save ho jaye
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS my_cpl_setting (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,34 +61,42 @@ def main():
   st.title("🏛️ मेरा लीव और अटेंडेंस ट्रैकर (Patna High Court Rules)")
   st.markdown("दैनिक उपस्थिति और स्मार्ट लीव डैशबोर्ड")
 
-  # --- CPL Managment & Quota Settings (Neeche ya Side bar me adjust) ---
-  st.sidebar.header("⚙️ CPL aur Leave Settings")
+  # --- CPL Setting Expander (Default Hide / Collapsed) ---
+  with st.sidebar.expander("⚙️ Advanced Settings (CPL Quota Setup)"):
+    conn = sqlite3.connect("my_personal_leaves_v11.db")
+    c = conn.cursor()
+    c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
+    saved_cpl = c.fetchone()
+    default_cpl = saved_cpl[0] if saved_cpl else 0
+    conn.close()
 
-  conn = sqlite3.connect("my_personal_leaves_v10.db")
+    total_cpl_allocated = st.number_input(
+        "Is saal ke liye Kul Applicable CPL",
+        min_value=0,
+        max_value=50,
+        value=default_cpl,
+        step=1,
+    )
+
+    if st.button("CPL Quota Save Karein"):
+      conn = sqlite3.connect("my_personal_leaves_v11.db")
+      cursor = conn.cursor()
+      cursor.execute("DELETE FROM my_cpl_setting")
+      cursor.execute(
+          "INSERT INTO my_cpl_setting (total_cpl) VALUES (?)",
+          (total_cpl_allocated,),
+      )
+      conn.commit()
+      conn.close()
+      st.success("✅ CPL quota save ho gaya!")
+      st.rerun()
+  
+  # Agar expander se bahar CPL use karni hai toh database se direct read karein
+  conn = sqlite3.connect("my_personal_leaves_v11.db")
   c = conn.cursor()
   c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
   saved_cpl = c.fetchone()
-  default_cpl = saved_cpl[0] if saved_cpl else 0
-
-  total_cpl_allocated = st.sidebar.number_input(
-      "Is saal ke liye Kul Applicable CPL (Ek baar enter karein)",
-      min_value=0,
-      max_value=50,
-      value=default_cpl,
-      step=1,
-  )
-
-  if st.sidebar.button("CPL Save Karein"):
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM my_cpl_setting")
-    cursor.execute(
-        "INSERT INTO my_cpl_setting (total_cpl) VALUES (?)",
-        (total_cpl_allocated,),
-    )
-    conn.commit()
-    st.sidebar.success("✅ CPL quota safaltapoorvak save ho gaya!")
-    st.rerun()
-
+  active_cpl_quota = saved_cpl[0] if saved_cpl else 0
   conn.close()
 
   st.sidebar.markdown("---")
@@ -99,7 +106,7 @@ def main():
       "Tarikh chunein", value=date.today()
   )
 
-  conn = sqlite3.connect("my_personal_leaves_v10.db")
+  conn = sqlite3.connect("my_personal_leaves_v11.db")
   c = conn.cursor()
   c.execute(
       "SELECT status FROM my_attendance WHERE att_date = ?",
@@ -124,7 +131,7 @@ def main():
 
   if st.sidebar.button("Upasthiti Save Karein"):
     status_val = "Present" if mark_present else "Absent"
-    conn = sqlite3.connect("my_personal_leaves_v10.db")
+    conn = sqlite3.connect("my_personal_leaves_v11.db")
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -142,7 +149,7 @@ def main():
   st.sidebar.header("➕ Nayi Chhutti Jodein (Apply Leave)")
 
   # Data Fetch
-  conn = sqlite3.connect("my_personal_leaves_v10.db")
+  conn = sqlite3.connect("my_personal_leaves_v11.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   conn.close()
@@ -164,7 +171,7 @@ def main():
   )
 
   cl_remaining = 16 - cl_taken
-  cpl_remaining = total_cpl_allocated - cpl_taken
+  cpl_remaining = active_cpl_quota - cpl_taken
   rh_remaining = 2 - rh_taken
 
   today_date = date.today()
@@ -175,9 +182,9 @@ def main():
       available_rh_options[rh_name] = rh_date_str
 
   with st.sidebar.form("leave_form"):
-    # Ab leave type me se CPL hata diya gaya hai taaki wahan se entry na ho
+    # CPL ko wapas leave type me jod diya gaya hai
     leave_category = st.selectbox(
-        "Chhutti ka prakar", ["CL", "EL", "RH", "Late Coming"]
+        "Chhutti ka prakar", ["CL", "CPL", "EL", "RH", "Late Coming"]
     )
 
     if leave_category == "RH":
@@ -210,20 +217,22 @@ def main():
           "Dino ki sankhya", min_value=1, max_value=30, value=1, step=1
       )
 
-    reason = st.text_area("Vajah / Tippani (Optional)")
+    reason = st.text_area("Vajah / Tippani (Reason)")
     submit = st.form_submit_button("Record Save Karein")
 
     if submit:
       error_msg = None
       if leave_category == "CL" and days_count > cl_remaining:
         error_msg = f"❌ Error: Kewal {cl_remaining} CL bachi hai!"
+      elif leave_category == "CPL" and days_count > cpl_remaining:
+        error_msg = f"❌ Error: Kewal {cpl_remaining} CPL bachi hai!"
       elif leave_category == "RH" and rh_remaining <= 0:
         error_msg = "❌ Error: Max 2 RH hi le sakte hain!"
 
       if error_msg:
         st.sidebar.error(error_msg)
       else:
-        conn = sqlite3.connect("my_personal_leaves_v10.db")
+        conn = sqlite3.connect("my_personal_leaves_v11.db")
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -265,7 +274,7 @@ def main():
 
   st.markdown("---")
 
-  # --- Calendar View (Sirf Rang 🟢 aur 🔴 bina text ke) ---
+  # --- Calendar View ---
   st.subheader("📅 Calendar View")
 
   c_col1, c_col2 = st.columns(2)
@@ -320,10 +329,12 @@ def main():
   if not df.empty:
     st.dataframe(df, use_container_width=True)
 
-    del_id = st.number_input("Hatane ke liye Record ID darj karein", min_value=0, step=1)
+    del_id = st.number_input(
+        "Hatane ke liye Record ID darj karein", min_value=0, step=1
+    )
     if st.button("Chayanit Record Hatayein"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v10.db")
+        conn = sqlite3.connect("my_personal_leaves_v11.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
