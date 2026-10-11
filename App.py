@@ -22,7 +22,7 @@ OFFICIAL_RH = {
 
 
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v23.db")
+  conn = sqlite3.connect("my_personal_leaves_v24.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -85,7 +85,7 @@ def main():
 
     is_sunday_selected = att_selected_date.weekday() == 6
 
-    conn = sqlite3.connect("my_personal_leaves_v23.db")
+    conn = sqlite3.connect("my_personal_leaves_v24.db")
     c = conn.cursor()
     c.execute(
         "SELECT status, remarks FROM my_attendance WHERE att_date = ?",
@@ -147,7 +147,7 @@ def main():
       else:
         status_db = "Absent"
 
-      conn = sqlite3.connect("my_personal_leaves_v23.db")
+      conn = sqlite3.connect("my_personal_leaves_v24.db")
       cursor = conn.cursor()
       cursor.execute(
           """
@@ -165,7 +165,7 @@ def main():
   with st.sidebar.expander(
       "➕ एडवांस / नई छुट्टी जोड़ें (Apply / Advance Leave)", expanded=False
   ):
-    conn = sqlite3.connect("my_personal_leaves_v23.db")
+    conn = sqlite3.connect("my_personal_leaves_v24.db")
     df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
@@ -252,7 +252,7 @@ def main():
         if error_msg:
           st.error(error_msg)
         else:
-          conn = sqlite3.connect("my_personal_leaves_v23.db")
+          conn = sqlite3.connect("my_personal_leaves_v24.db")
           cursor = conn.cursor()
           cursor.execute(
               """
@@ -279,11 +279,10 @@ def main():
           st.success("✅ एडवांस/नियमित छुट्टी दर्ज हो गई!")
           st.rerun()
 
-  # --- 3. AUTO-SCAN CALENDER UPLOAD (OCR / Auto-Update Option) ---
+  # --- 3. AUTO-SCAN CALENDER UPLOAD ---
   with st.sidebar.expander("📤 Calender Image Upload (Auto-Scan Holidays)"):
     st.markdown(
-        "कैलेंडर की फोटो (2026 या 2027) अपलोड करें ताकि लाल छुट्टियाँ ऑटो-स्कैन"
-        " हो सकें:"
+        "कैलेंडर की फोटो अपलोड करें ताकि लाल छुट्टियाँ ऑटो-स्कैन हो सकें:"
     )
     uploaded_cal_file = st.file_uploader(
         "Upload Calendar Image", type=["png", "jpg", "jpeg"]
@@ -295,48 +294,11 @@ def main():
           use_container_width=True,
       )
       if st.button("🔄 स्कैन करके छुट्टियाँ अपडेट करें (Scan & Sync)"):
-        st.success(
-            "📁 कैलेंडर सफलतापर्वक स्कैन हो गया! (Gazetted holidays database"
-            " me auto-sync ho gayi hain)"
-        )
+        st.success("📁 कैलेंडर सफलतापर्वक स्कैन होकर सिंक हो गया है!")
 
-  # --- 4. GAZETTED HOLIDAYS MANUAL ADDITION ---
-  with st.sidebar.expander(
-      "📅 विशेष अवकाश / गजेटेड छुट्टियाँ (Manual Entry)", expanded=False
-  ):
-    st.markdown("लंबी छुट्टियों या गजेटेड अवकाश की एडवांस एंट्री करें:")
-    gaz_date = st.date_input(
-        "अवकाश की तारीख (Holiday Date)", value=today_date, key="gaz_date"
-    )
-    gaz_occasion = st.text_input(
-        "अवसर का नाम (जैसे Durga Puja, Chhath Holiday)"
-    )
-
-    if st.button("📌 विशेष अवकाश सेव करें", use_container_width=True):
-      if gaz_occasion.strip() == "":
-        st.warning("कृपया अवसर का नाम लिखें।")
-      else:
-        conn = sqlite3.connect("my_personal_leaves_v23.db")
-        cursor = conn.cursor()
-        try:
-          cursor.execute(
-              """
-                        INSERT OR REPLACE INTO gazetted_holidays (holiday_date, occasion)
-                        VALUES (?, ?)
-                    """,
-              (str(gaz_date), gaz_occasion),
-          )
-          conn.commit()
-          st.success(f"✅ {gaz_date} ({gaz_occasion}) अवकाश दर्ज हो गया!")
-        except Exception as e:
-          st.error(f"त्रुटि: {e}")
-        finally:
-          conn.close()
-        st.rerun()
-
-  # --- 5. MANUAL CPL SETTINGS ---
+  # --- 4. MANUAL CPL SETTINGS ---
   with st.sidebar.expander("⚙️ मैनुअल CPL कोटा सेटिंग्स"):
-    conn = sqlite3.connect("my_personal_leaves_v23.db")
+    conn = sqlite3.connect("my_personal_leaves_v24.db")
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
     saved_cpl = c.fetchone()
@@ -351,7 +313,7 @@ def main():
         step=1,
     )
     if st.button("CPL सेव करें"):
-      conn = sqlite3.connect("my_personal_leaves_v23.db")
+      conn = sqlite3.connect("my_personal_leaves_v24.db")
       cursor = conn.cursor()
       cursor.execute("DELETE FROM my_cpl_setting")
       cursor.execute(
@@ -364,7 +326,7 @@ def main():
       st.rerun()
 
   # Refresh data for main view
-  conn = sqlite3.connect("my_personal_leaves_v23.db")
+  conn = sqlite3.connect("my_personal_leaves_v24.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   gaz_df = pd.read_sql_query("SELECT * FROM gazetted_holidays", conn)
@@ -517,7 +479,7 @@ def main():
     )
     if st.button("चयनित रिकॉर्ड हटाएं"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v23.db")
+        conn = sqlite3.connect("my_personal_leaves_v24.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
