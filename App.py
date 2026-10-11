@@ -19,7 +19,7 @@ OFFICIAL_RH_2026 = {
 
 # डेटाबेस सेटअप
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v6.db")
+  conn = sqlite3.connect("my_personal_leaves_v7.db")
   cursor = conn.cursor()
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS my_leaves (
@@ -58,7 +58,7 @@ def main():
   st.sidebar.header("➕ नई छुट्टी जोड़ें (Apply Leave)")
 
   # डेटा फेच करना
-  conn = sqlite3.connect("my_personal_leaves_v6.db")
+  conn = sqlite3.connect("my_personal_leaves_v7.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   conn.close()
 
@@ -149,12 +149,6 @@ def main():
       elif leave_category == "CPL":
         if days_count > cpl_remaining:
           error_msg = f"❌ Error: Aapke paas kewal {cpl_remaining} CPL bachi hai! Kripya sahi sankhya darj karein."
-      elif leave_category == "EL":
-        el_balance_current = (
-            33 - el_taken
-        )  # Agar strict limit karni ho ya carry forward handle karna ho
-        # Agar aap chahte hain ki EL bhi limit ho toh yahan condition laga sakte hain
-        pass
       elif leave_category == "RH":
         if rh_remaining <= 0:
           error_msg = "❌ Error: Aap saal bhar me adhiktam kewal 2 hi RH le sakte hain!"
@@ -164,7 +158,7 @@ def main():
       if error_msg:
         st.sidebar.error(error_msg)
       else:
-        conn = sqlite3.connect("my_personal_leaves_v6.db")
+        conn = sqlite3.connect("my_personal_leaves_v7.db")
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -186,7 +180,22 @@ def main():
         )
         st.rerun()
 
-  # --- डैशबोर्ड और डिटेल्ड समरी ---
+  # --- मुख्य होम पेज पर हमेशा दिखने वाला लाइव बैलेंस (Always Visible Summary Header) ---
+  st.markdown("### 🟢 Aapka Vartaman Leave Balance (Live Status)")
+  bal_col1, bal_col2, bal_col3, bal_col4 = st.columns(4)
+  with bal_col1:
+    st.success(f"**CL Bacha Hua:** {cl_remaining} din")
+  with bal_col2:
+    st.info(f"**CPL Bacha Hua:** {cpl_remaining} din")
+  with bal_col3:
+    el_balance = 33 - el_taken
+    st.warning(f"**EL Balance:** {el_balance} din")
+  with bal_col4:
+    st.error(f"**RH Bacha Hua:** {rh_remaining} din")
+
+  st.markdown("---")
+
+  # --- डैशबोर्ड और डिटेल्ड समरी मेट्रिक्स ---
   st.subheader("📊 Varshik Leave Balance aur Sthiti (Leave Quota Summary)")
   col1, col2, col3, col4 = st.columns(4)
 
@@ -203,7 +212,6 @@ def main():
         f"Shesh: {cpl_remaining} din (Kul: {total_cpl_allocated})",
     )
   with col3:
-    el_balance = 33 - el_taken
     st.metric(
         "EL (Earned Leave)",
         f"Kharch: {el_taken} din",
@@ -238,7 +246,7 @@ def main():
     )
     if st.button("Chayanit Record Hatayein"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v6.db")
+        conn = sqlite3.connect("my_personal_leaves_v7.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
