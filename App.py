@@ -22,7 +22,7 @@ OFFICIAL_GAZETTED_2026 = {
     "2026-09-04": "Janmashtami",
     "2026-09-17": "Vishwakarma Puja",
     "2026-10-02": "Mahatma Gandhi Birthday",
-    # Durga Puja & October Long Vacation 2026
+    # Durga Puja & October Long Vacation 2026 (Continuous Red Days)
     "2026-10-18": "Durga Puja (Saptami)",
     "2026-10-19": "Durga Puja (Ashtami)",
     "2026-10-20": "Durga Puja (Navami)",
@@ -31,24 +31,37 @@ OFFICIAL_GAZETTED_2026 = {
     "2026-10-23": "Durga Puja Vacation",
     "2026-10-24": "Durga Puja Vacation",
     "2026-10-26": "Lakhshmi Puja",
-    # Diwali & Chhath Puja 2026
+    # Diwali & Chhath Puja Continuous Long Vacation (November 8 to November 17)
     "2026-11-08": "Diwali",
-    "2026-11-09": "Chitragupta Puja / Govardhan Puja",
-    "2026-11-10": "Chhath Puja (Day 1)",
-    "2026-11-11": "Chhath Puja (Usha Arghya)",
+    "2026-11-09": "Govardhan Puja / Chitragupta Puja",
+    "2026-11-10": "Chhath Puja",
+    "2026-11-11": "Chhath Puja",
+    "2026-11-12": "Vacation Holiday",
+    "2026-11-13": "Vacation Holiday",
+    "2026-11-14": "Vacation Holiday",
+    "2026-11-15": "Vacation Holiday",
+    "2026-11-16": "Vacation Holiday",
+    "2026-11-17": "Vacation Holiday",
+    # December Holidays (including December 12 and December 25 to 31)
+    "2026-12-12": "Gazetted Holiday",
     "2026-12-25": "Christmas Day",
+    "2026-12-26": "Winter Vacation",
+    "2026-12-27": "Winter Vacation",
+    "2026-12-28": "Winter Vacation",
+    "2026-12-29": "Winter Vacation",
+    "2026-12-30": "Winter Vacation",
+    "2026-12-31": "Winter Vacation",
 }
 
-# Patna High Court 2026 Half-Day Office Dates (Two colors / Half-day working)
+# Patna High Court 2026 Half-Day Office Dates (Only 4 August & 25 September)
 OFFICIAL_HALFDAY_2026 = {
-    "2026-03-02": "Holi Eve Half-Day",
-    "2026-11-07": "Diwali Eve Half-Day",
-    "2026-12-24": "Christmas Eve Half-Day",
+    "2026-08-04": "Half-Day Office",
+    "2026-09-25": "Half-Day Office",
 }
 
 
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v27.db")
+  conn = sqlite3.connect("my_personal_leaves_v31.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -103,7 +116,7 @@ def main():
 
     is_sunday_selected = att_selected_date.weekday() == 6
 
-    conn = sqlite3.connect("my_personal_leaves_v27.db")
+    conn = sqlite3.connect("my_personal_leaves_v31.db")
     c = conn.cursor()
     c.execute(
         "SELECT status, remarks FROM my_attendance WHERE att_date = ?",
@@ -165,7 +178,7 @@ def main():
       else:
         status_db = "Absent"
 
-      conn = sqlite3.connect("my_personal_leaves_v27.db")
+      conn = sqlite3.connect("my_personal_leaves_v31.db")
       cursor = conn.cursor()
       cursor.execute(
           """
@@ -183,7 +196,7 @@ def main():
   with st.sidebar.expander(
       "➕ एडवांस / नई छुट्टी जोड़ें (Apply / Advance Leave)", expanded=False
   ):
-    conn = sqlite3.connect("my_personal_leaves_v27.db")
+    conn = sqlite3.connect("my_personal_leaves_v31.db")
     df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
@@ -202,9 +215,6 @@ def main():
     )
     rh_df = df[df["leave_type"] == "RH"] if not df.empty else pd.DataFrame()
     rh_taken = rh_df["days_count"].sum() if not rh_df.empty else 0
-    already_taken_rh_dates = (
-        rh_df["leave_date"].tolist() if not rh_df.empty else []
-    )
 
     cl_remaining = 16 - cl_taken
     cpl_remaining = active_cpl_quota - cpl_taken
@@ -240,7 +250,7 @@ def main():
         if error_msg:
           st.error(error_msg)
         else:
-          conn = sqlite3.connect("my_personal_leaves_v27.db")
+          conn = sqlite3.connect("my_personal_leaves_v31.db")
           cursor = conn.cursor()
           cursor.execute(
               """
@@ -269,7 +279,7 @@ def main():
 
   # --- 3. MANUAL CPL SETTINGS ---
   with st.sidebar.expander("⚙️ मैनुअल CPL कोटा सेटिंग्स"):
-    conn = sqlite3.connect("my_personal_leaves_v27.db")
+    conn = sqlite3.connect("my_personal_leaves_v31.db")
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
     saved_cpl = c.fetchone()
@@ -284,7 +294,7 @@ def main():
         step=1,
     )
     if st.button("CPL सेव करें"):
-      conn = sqlite3.connect("my_personal_leaves_v27.db")
+      conn = sqlite3.connect("my_personal_leaves_v31.db")
       cursor = conn.cursor()
       cursor.execute("DELETE FROM my_cpl_setting")
       cursor.execute(
@@ -297,7 +307,7 @@ def main():
       st.rerun()
 
   # Refresh data for main view
-  conn = sqlite3.connect("my_personal_leaves_v27.db")
+  conn = sqlite3.connect("my_personal_leaves_v31.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   c = conn.cursor()
@@ -452,7 +462,7 @@ def main():
     )
     if st.button("चयनित रिकॉर्ड हटाएं"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v27.db")
+        conn = sqlite3.connect("my_personal_leaves_v31.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
@@ -460,7 +470,7 @@ def main():
         st.success(f"ID {del_id} ka record hata diya gaya hai!")
         st.rerun()
   else:
-    st.info("Abhi tak koi leave record darj nahi hai.")
+    st.info("Abhi तक कोई लीव रिकॉर्ड दर्ज नहीं है।")
 
 
 if __name__ == "__main__":
