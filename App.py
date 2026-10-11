@@ -19,7 +19,7 @@ OFFICIAL_RH_2026 = {
 
 # डेटाबेस सेटअप
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v5.db")
+  conn = sqlite3.connect("my_personal_leaves_v6.db")
   cursor = conn.cursor()
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS my_leaves (
@@ -42,7 +42,7 @@ def main():
   )
 
   st.title("🏛️ मेरा लीव और अटेंडेंस ट्रैकर (Patna High Court Rules)")
-  st.markdown("कैलेंडर और नियम आधारित स्मार्ट लीव डैशबोर्ड")
+  st.markdown("कैलेंडर और सख्त नियम आधारित स्मार्ट लीव डैशबोर्ड")
 
   # --- साइडबार: ओपनिंग बैलेंस / कोटा सेट करने के लिए ---
   st.sidebar.header("⚙️ लीव कोटा सेटिंग्स")
@@ -58,7 +58,7 @@ def main():
   st.sidebar.header("➕ नई छुट्टी जोड़ें (Apply Leave)")
 
   # डेटा फेच करना
-  conn = sqlite3.connect("my_personal_leaves_v5.db")
+  conn = sqlite3.connect("my_personal_leaves_v6.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   conn.close()
 
@@ -88,9 +88,7 @@ def main():
   # आज की तारीख (Current Date)
   today_date = date.today()
 
-  # डायनेमिक RH लिस्ट फ़िल्टर करना:
-  # 1. जो तारीखें निकल चुकी हैं या आज से पहले की हैं, उन्हें हटाएँ।
-  # 2. जो RH पहले ही ली जा चुकी हैं, उन्हें हटाएँ।
+  # डायनेमिक RH लिस्ट फ़िल्टर करना
   available_rh_options = {}
   for rh_name, rh_date_str in OFFICIAL_RH_2026.items():
     rh_dt = datetime.strptime(rh_date_str, "%Y-%m-%d").date()
@@ -103,22 +101,18 @@ def main():
         ["CL", "CPL", "EL", "RH", "Late Coming"],
     )
 
-    # अगर RH चुना गया है तो सिर्फ आज और उसके बाद की ऑफिशियल लिस्ट दिखेगी
     if leave_category == "RH":
       if rh_remaining <= 0:
-        st.warning("⚠️ आपने इस साल की दोनों (2) RH पहले ही पूरी कर ली हैं!")
+        st.warning("⚠️ Aapne is saal ki dono (2) RH pehle hi poori kar li hain!")
         selected_rh_key = None
         leave_date = today_date
       elif not available_rh_options:
-        st.info(
-            "आज या इसके बाद के लिए कोई भी आगामी Restricted Holiday उपलब्ध नहीं"
-            " है।"
-        )
+        st.info("Aaj ya iske baad ke liye koi bhi RH uplabdh nahi hai.")
         selected_rh_key = None
         leave_date = today_date
       else:
         selected_rh_key = st.selectbox(
-            "आज या इसके बाद की वैध RH चुनें:",
+            "Aaj ya iske baad ki vaidya RH chunein:",
             list(available_rh_options.keys()),
         )
         leave_date = (
@@ -129,47 +123,48 @@ def main():
             else today_date
         )
     else:
-      leave_date = st.date_input("छुट्टी की तारीख (Date)")
+      leave_date = st.date_input("Chhutti ki tarikh (Date)")
 
-    # दिनों की संख्या (Integers only) - RH के लिए ऑटोमैटिक 1 दिन रहेगा, बिना किसी फालतू मैसेज के
     if leave_category == "RH":
       days_count = 1
     else:
       days_count = st.number_input(
-          "दिनों की संख्या (Full Days)",
+          "Dino ki sankhya (Full Days)",
           min_value=1,
           max_value=30,
           value=1,
           step=1,
       )
 
-    reason = st.text_area("वजह / टिप्पणी (Optional)")
-    submit = st.form_submit_button("रिकॉर्ड सेव करें")
+    reason = st.text_area("Vajah / Tippani (Optional)")
+    submit = st.form_submit_button("Record Save Karein")
 
     if submit:
       error_msg = None
 
+      # Strict Balance Validation Checks
       if leave_category == "CL":
         if days_count > cl_remaining:
-          error_msg = (
-              f"❌ त्रुटि: आपके पास केवल {cl_remaining} CL बची है! इससे ज़्यादा"
-              " अनुमति नहीं है।"
-          )
+          error_msg = f"❌ Error: Aapke paas kewal {cl_remaining} CL bachi hai! Isse zyada ki entry nahi ho sakti."
       elif leave_category == "CPL":
         if days_count > cpl_remaining:
-          error_msg = (
-              f"❌ त्रुटि: आपके पास केवल {cpl_remaining} CPL बची है!"
-          )
+          error_msg = f"❌ Error: Aapke paas kewal {cpl_remaining} CPL bachi hai! Kripya sahi sankhya darj karein."
+      elif leave_category == "EL":
+        el_balance_current = (
+            33 - el_taken
+        )  # Agar strict limit karni ho ya carry forward handle karna ho
+        # Agar aap chahte hain ki EL bhi limit ho toh yahan condition laga sakte hain
+        pass
       elif leave_category == "RH":
         if rh_remaining <= 0:
-          error_msg = "❌ त्रुटि: आप साल भर में अधिकतम केवल 2 ही RH ले सकते हैं!"
+          error_msg = "❌ Error: Aap saal bhar me adhiktam kewal 2 hi RH le sakte hain!"
         elif not selected_rh_key:
-          error_msg = "❌ कृपया मान्य RH चुनें।"
+          error_msg = "❌ Kripya manya RH chunein."
 
       if error_msg:
         st.sidebar.error(error_msg)
       else:
-        conn = sqlite3.connect("my_personal_leaves_v5.db")
+        conn = sqlite3.connect("my_personal_leaves_v6.db")
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -186,70 +181,72 @@ def main():
         )
         conn.commit()
         conn.close()
-        st.sidebar.success("✅ आपकी छुट्टी का रिकॉर्ड सफलतापर्वक दर्ज हो गया!")
+        st.sidebar.success(
+            "✅ Aapki chhutti ka record safaltapoorvak darj ho gaya!"
+        )
         st.rerun()
 
   # --- डैशबोर्ड और डिटेल्ड समरी ---
-  st.subheader("📊 वार्षिक लीव बैलेंस और स्थिति (Leave Quota Summary)")
+  st.subheader("📊 Varshik Leave Balance aur Sthiti (Leave Quota Summary)")
   col1, col2, col3, col4 = st.columns(4)
 
   with col1:
     st.metric(
         "CL (Casual Leave)",
-        f"खर्च: {cl_taken} दिन",
-        f"शेष: {cl_remaining} दिन (मैक्स 16)",
+        f"Kharch: {cl_taken} din",
+        f"Shesh: {cl_remaining} din (Max 16)",
     )
   with col2:
     st.metric(
         "CPL (Compensatory)",
-        f"खर्च: {cpl_taken} दिन",
-        f"शेष: {cpl_remaining} दिन (कुल: {total_cpl_allocated})",
+        f"Kharch: {cpl_taken} din",
+        f"Shesh: {cpl_remaining} din (Kul: {total_cpl_allocated})",
     )
   with col3:
     el_balance = 33 - el_taken
     st.metric(
         "EL (Earned Leave)",
-        f"खर्च: {el_taken} दिन",
-        f"बैलेंस/कैरी-फॉरवर्ड: {el_balance} दिन",
+        f"Kharch: {el_taken} din",
+        f"Balance/Carry-forward: {el_balance} din",
     )
   with col4:
     st.metric(
         "RH (Restricted)",
-        f"खर्च: {rh_taken} दिन",
-        f"शेष: {rh_remaining} दिन (मैक्स 2)",
+        f"Kharch: {rh_taken} din",
+        f"Shesh: {rh_remaining} din (Max 2)",
     )
 
   # --- फुल डिटेल समरी बॉक्स ---
   st.markdown("---")
   st.info(
-      f"📌 **विस्तृत विवरण (Full Detail Summary - 2026):**\n"
-      f"- इस कलैंडर वर्ष में अब तक आपने कुल **{cl_taken} दिन** Casual Leave (CL) का उपयोग किया है।\n"
-      f"- कुल **{cpl_taken} दिन** Compensatory Leave (CPL) खर्च की गई है।\n"
-      f"- कुल **{el_taken} दिन** Earned Leave (EL) ली गई है।\n"
-      f"- कुल **{rh_taken} दिन** Restricted Holiday (RH) अवमुक्त की गई है।"
+      f"📌 **Vistrit Vivaran (Full Detail Summary - 2026):**\n"
+      f"- Is calendar varsh me ab tak aapne kul **{cl_taken} din** Casual Leave (CL) ka upyog kiya hai.\n"
+      f"- Kul **{cpl_taken} din** Compensatory Leave (CPL) kharch ki gayi hai.\n"
+      f"- Kul **{el_taken} din** Earned Leave (EL) li gayi hai.\n"
+      f"- Kul **{rh_taken} din** Restricted Holiday (RH) avmukt ki gayi hai."
   )
 
-  st.subheader("📋 सभी लीव रिकॉर्ड्स (History)")
+  st.subheader("📋 Sabhi Leave Records (History)")
 
   if not df.empty:
     st.dataframe(df, use_container_width=True)
 
     # रिकॉर्ड हटाने का विकल्प
-    st.markdown("### ⚙️ रिकॉर्ड प्रबंधित करें (Delete Record)")
+    st.markdown("### ⚙️ Record Prabandhit Karein (Delete Record)")
     del_id = st.number_input(
-        "हटाने के लिए रिकॉर्ड ID दर्ज करें", min_value=0, step=1
+        "Hatane ke liye Record ID darj karein", min_value=0, step=1
     )
-    if st.button("चयनित रिकॉर्ड हटाएं"):
+    if st.button("Chayanit Record Hatayein"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v5.db")
+        conn = sqlite3.connect("my_personal_leaves_v6.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
         conn.close()
-        st.success(f"ID {del_id} का रिकॉर्ड हटा दिया गया है!")
+        st.success(f"ID {del_id} ka record hata diya gaya hai!")
         st.rerun()
   else:
-    st.info("अभी तक कोई रिकॉर्ड दर्ज नहीं किया गया है।")
+    st.info("Abhi tak koi record darj nahi kiya gaya hai.")
 
 
 if __name__ == "__main__":
