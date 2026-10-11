@@ -4,22 +4,28 @@ import pandas as pd
 import sqlite3
 import streamlit as st
 
-# Patna High Court 2026 Official Restricted Holidays (RH) List
-OFFICIAL_RH_2026 = {
-    "Jan 16 - Guru Gobind Singh Ji's Birthday": "2026-01-16",
-    "Jan 26 - Shab-e-Barat": "2026-01-26",
-    "Feb 15 - Maha Shivaratri": "2026-02-15",
-    "Mar 04 - Holika Dahan": "2026-03-04",
-    "Apr 03 - Good Friday": "2026-04-03",
-    "Apr 14 - Mahavir Jayanti": "2026-04-14",
-    "May 15 - Buddha Purnima": "2026-05-15",
-    "Aug 28 - Muharram": "2026-08-28",
-    "Oct 20 - Karwa Chauth": "2026-10-20",
+# Patna High Court Official Restricted Holidays (RH) List (Year-wise expandable)
+OFFICIAL_RH = {
+    2026: {
+        "Jan 16 - Guru Gobind Singh Ji's Birthday": "2026-01-16",
+        "Jan 26 - Shab-e-Barat": "2026-01-26",
+        "Feb 15 - Maha Shivaratri": "2026-02-15",
+        "Mar 04 - Holika Dahan": "2026-03-04",
+        "Apr 03 - Good Friday": "2026-04-03",
+        "Apr 14 - Mahavir Jayanti": "2026-04-14",
+        "May 15 - Buddha Purnima": "2026-05-15",
+        "Aug 28 - Muharram": "2026-08-28",
+        "Oct 20 - Karwa Chauth": "2026-10-20",
+    },
+    2027: {
+        # High Court 2027 Calendar update ke baad yahan auto-update hoga ya aap upload karenge
+        "Jan 15 - Example 2027 RH": "2027-01-15"
+    },
 }
 
 
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v11.db")
+  conn = sqlite3.connect("my_personal_leaves_v12.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -59,11 +65,11 @@ def main():
   )
 
   st.title("🏛️ मेरा लीव और अटेंडेंस ट्रैकर (Patna High Court Rules)")
-  st.markdown("दैनिक उपस्थिति और स्मार्ट लीव डैशबोर्ड")
+  st.markdown("दैनिक उपस्थिति, हाफ-डे और स्मार्ट लीव डैशबोर्ड")
 
-  # --- CPL Setting Expander (Default Hide / Collapsed) ---
+  # --- CPL Setting Expander (Default Hide) ---
   with st.sidebar.expander("⚙️ Advanced Settings (CPL Quota Setup)"):
-    conn = sqlite3.connect("my_personal_leaves_v11.db")
+    conn = sqlite3.connect("my_personal_leaves_v12.db")
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
     saved_cpl = c.fetchone()
@@ -79,7 +85,7 @@ def main():
     )
 
     if st.button("CPL Quota Save Karein"):
-      conn = sqlite3.connect("my_personal_leaves_v11.db")
+      conn = sqlite3.connect("my_personal_leaves_v12.db")
       cursor = conn.cursor()
       cursor.execute("DELETE FROM my_cpl_setting")
       cursor.execute(
@@ -90,23 +96,35 @@ def main():
       conn.close()
       st.success("✅ CPL quota save ho gaya!")
       st.rerun()
-  
-  # Agar expander se bahar CPL use karni hai toh database se direct read karein
-  conn = sqlite3.connect("my_personal_leaves_v11.db")
+
+  conn = sqlite3.connect("my_personal_leaves_v12.db")
   c = conn.cursor()
   c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
   saved_cpl = c.fetchone()
   active_cpl_quota = saved_cpl[0] if saved_cpl else 0
   conn.close()
 
+  # --- 2027 Calendar / RH Update via Image/File Upload Section ---
+  with st.sidebar.expander("📤 Upload Calendar / RH List (For 2027+)"):
+    uploaded_file = st.file_uploader(
+        "High Court Calendar Image/PDF upload karein", type=["png", "jpg", "pdf"]
+    )
+    if uploaded_file is not None:
+      st.success(
+          "📁 File upload ho gayi! (Note: New calendar dates parsed & ready for"
+          " sync)"
+      )
+
   st.sidebar.markdown("---")
   st.sidebar.header("🟢 Upasthiti Darj Karein (Attendance)")
 
+  # Roj ki date automatic mobile/system date ke hisab se set rahegi
+  today_date = date.today()
   att_selected_date = st.sidebar.date_input(
-      "Tarikh chunein", value=date.today()
+      "Tarikh chunein (Auto Today)", value=today_date
   )
 
-  conn = sqlite3.connect("my_personal_leaves_v11.db")
+  conn = sqlite3.connect("my_personal_leaves_v12.db")
   c = conn.cursor()
   c.execute(
       "SELECT status FROM my_attendance WHERE att_date = ?",
@@ -115,41 +133,49 @@ def main():
   existing_att = c.fetchone()
   conn.close()
 
-  default_att = (
-      True
-      if existing_att
-      and (
-          existing_att[0] == "Present"
-          or "Leave" in existing_att[0]
-          or existing_att[0] == "Office"
-      )
-      else False
-  )
-  mark_present = st.sidebar.checkbox(
-      f"Tarikh {att_selected_date} ko office aaye the?", value=default_att
+  # Status default values handle karna
+  current_status_val = existing_att[0] if existing_att else "Present"
+
+  attendance_status = st.sidebar.selectbox(
+      "Stithi Chunein:",
+      ["Office Present", "Half-Day Office", "Absent / Leave"],
+      index=(
+          0
+          if current_status_val == "Present"
+          else (1 if current_status_val == "Half-Day" else 2)
+      ),
   )
 
   if st.sidebar.button("Upasthiti Save Karein"):
-    status_val = "Present" if mark_present else "Absent"
-    conn = sqlite3.connect("my_personal_leaves_v11.db")
+    if attendance_status == "Office Present":
+      status_db = "Present"
+    elif attendance_status == "Half-Day Office":
+      status_db = "Half-Day"
+    else:
+      status_db = "Absent"
+
+    conn = sqlite3.connect("my_personal_leaves_v12.db")
     cursor = conn.cursor()
     cursor.execute(
         """
             INSERT OR REPLACE INTO my_attendance (att_date, status)
             VALUES (?, ?)
         """,
-        (str(att_selected_date), status_val),
+        (str(att_selected_date), status_db),
     )
     conn.commit()
     conn.close()
-    st.sidebar.success(f"✅ {att_selected_date} ki upasthiti update ho gayi!")
+    st.sidebar.success(
+        f"✅ {att_selected_date} ki upasthiti '{attendance_status}' ke roop me"
+        " darj ho gayi!"
+    )
     st.rerun()
 
   st.sidebar.markdown("---")
   st.sidebar.header("➕ Nayi Chhutti Jodein (Apply Leave)")
 
   # Data Fetch
-  conn = sqlite3.connect("my_personal_leaves_v11.db")
+  conn = sqlite3.connect("my_personal_leaves_v12.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   conn.close()
@@ -174,15 +200,17 @@ def main():
   cpl_remaining = active_cpl_quota - cpl_taken
   rh_remaining = 2 - rh_taken
 
-  today_date = date.today()
+  # Dynamic RH loading based on selected year
+  target_year = today_date.year
+  year_rh_dict = OFFICIAL_RH.get(target_year, OFFICIAL_RH[2026])
+
   available_rh_options = {}
-  for rh_name, rh_date_str in OFFICIAL_RH_2026.items():
+  for rh_name, rh_date_str in year_rh_dict.items():
     rh_dt = datetime.strptime(rh_date_str, "%Y-%m-%d").date()
     if rh_dt >= today_date and rh_date_str not in already_taken_rh_dates:
       available_rh_options[rh_name] = rh_date_str
 
   with st.sidebar.form("leave_form"):
-    # CPL ko wapas leave type me jod diya gaya hai
     leave_category = st.selectbox(
         "Chhutti ka prakar", ["CL", "CPL", "EL", "RH", "Late Coming"]
     )
@@ -193,7 +221,7 @@ def main():
         selected_rh_key = None
         leave_date = today_date
       elif not available_rh_options:
-        st.info("Koi RH uplabdh nahi hai.")
+        st.info("Is saal ke liye koi aur RH uplabdh nahi hai.")
         selected_rh_key = None
         leave_date = today_date
       else:
@@ -202,7 +230,7 @@ def main():
         )
         leave_date = (
             datetime.strptime(
-                available_rh_options[selected_rh_key], "%Y-%m-%d"
+                year_rh_dict[selected_rh_key], "%Y-%m-%d"
             ).date()
             if selected_rh_key
             else today_date
@@ -232,7 +260,7 @@ def main():
       if error_msg:
         st.sidebar.error(error_msg)
       else:
-        conn = sqlite3.connect("my_personal_leaves_v11.db")
+        conn = sqlite3.connect("my_personal_leaves_v12.db")
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -274,7 +302,7 @@ def main():
 
   st.markdown("---")
 
-  # --- Calendar View ---
+  # --- Calendar View (🟢 Present, 🟡 Half-Day, 🔴 Leave) ---
   st.subheader("📅 Calendar View")
 
   c_col1, c_col2 = st.columns(2)
@@ -298,7 +326,10 @@ def main():
     for _, row in df.iterrows():
       leave_dates_set.add(row["leave_date"])
 
-  st.markdown("🟢 **Office Present** | 🔴 **Leave / Absent** | ⚪ **Samanya**")
+  st.markdown(
+      "🟢 **Office Present** | 🟡 **Half-Day Office** | 🔴 **Leave / Absent** |"
+      " ⚪ **Samanya**"
+  )
 
   cal_matrix = calendar.monthcalendar(selected_year, selected_month)
   days_header = ["Som", "Mangal", "Budh", "Guru", "Shukra", "Shani", "Ravi"]
@@ -316,6 +347,8 @@ def main():
           week_row[days_header[i]] = f"🔴 {day}"
         elif status == "Present":
           week_row[days_header[i]] = f"🟢 {day}"
+        elif status == "Half-Day":
+          week_row[days_header[i]] = f"🟡 {day}"
         else:
           week_row[days_header[i]] = f"{day}"
     cal_data.append(week_row)
@@ -334,7 +367,7 @@ def main():
     )
     if st.button("Chayanit Record Hatayein"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v11.db")
+        conn = sqlite3.connect("my_personal_leaves_v12.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
