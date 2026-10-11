@@ -18,12 +18,11 @@ OFFICIAL_RH_2026 = {
 }
 
 
-# डेटाबेस सेटअप (Leaves aur Attendance dono ke liye)
+# डेटाबेस सेटअप
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v8.db")
+  conn = sqlite3.connect("my_personal_leaves_v9.db")
   cursor = conn.cursor()
 
-  # Leave Table
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS my_leaves (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,7 +34,6 @@ def init_db():
         )
     """)
 
-  # Attendance Table
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS my_attendance (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,9 +53,9 @@ def main():
   )
 
   st.title("🏛️ मेरा लीव और अटेंडेंस ट्रैकर (Patna High Court Rules)")
-  st.markdown("दैनिक उपस्थिति और स्मार्ट लीव डैशबोर्ड")
+  st.markdown("दैनिक उपस्थिति और स्मार्ट लीव डैशबोर्ड (बैकडेट एंट्री सहित)")
 
-  # --- साइडबार: कोटा सेटिंग्स और अटेंडेंस/लीव एंट्री ---
+  # --- साइडबार: कोटा सेटिंग्स ---
   st.sidebar.header("⚙️ लीव कोटा सेटिंग्स")
   total_cpl_allocated = st.sidebar.number_input(
       "इस साल कुल मान्य CPL (Total Applicable CPL)",
@@ -68,42 +66,62 @@ def main():
   )
 
   st.sidebar.markdown("---")
-  st.sidebar.header("🟢 आज की उपस्थिति (Daily Attendance)")
-  today_date = date.today()
+  st.sidebar.header("🟢 उपस्थिति दर्ज करें (Backdate / Daily Attendance)")
 
-  # चेक करना कि आज की अटेंडेंस पहले से डली है या नहीं
-  conn = sqlite3.connect("my_personal_leaves_v8.db")
+  # किसी भी पुरानी या आज की तारीख चुनने का विकल्प
+  att_selected_date = st.sidebar.date_input(
+      "उपस्थिति की तारीख चुनें (Select Date)", value=date.today()
+  )
+
+  # चुनी गई तारीख की पुरानी अटेंडेंस चेक करना
+  conn = sqlite3.connect("my_personal_leaves_v9.db")
   c = conn.cursor()
-  c.execute("SELECT status FROM my_attendance WHERE att_date = ?", (str(today_date),))
+  c.execute(
+      "SELECT status FROM my_attendance WHERE att_date = ?",
+      (str(att_selected_date),),
+  )
   existing_att = c.fetchone()
   conn.close()
 
-  default_att = True if existing_att and existing_att[0] == "Present" else False
+  default_att = (
+      True
+      if existing_att
+      and (
+          existing_att[0] == "Present"
+          or "Leave" in existing_att[0]
+          or existing_att[0] == "Office"
+      )
+      else False
+  )
   mark_present = st.sidebar.checkbox(
-      f"आज ({today_date}) कार्यालय में उपस्थित रहे?", value=default_att
+      f"तारीख {att_selected_date} को कार्यालय में उपस्थित रहे?",
+      value=default_att,
   )
 
-  if st.sidebar.button("उपस्थिति सेव करें"):
+  if st.sidebar.button("उपस्थिति सेव/सुधार करें"):
     status_val = "Present" if mark_present else "Absent"
-    conn = sqlite3.connect("my_personal_leaves_v8.db")
+    conn = sqlite3.connect("my_personal_leaves_v9.db")
     cursor = conn.cursor()
     cursor.execute(
         """
             INSERT OR REPLACE INTO my_attendance (att_date, status)
             VALUES (?, ?)
         """,
-        (str(today_date), status_val),
+        (str(att_selected_date), status_val),
     )
     conn.commit()
     conn.close()
-    st.sidebar.success(f"✅ उपस्थिति '{status_val}' के रूप में दर्ज हो गई!")
+    st.sidebar.success(
+        f"✅ {att_selected_date} की उपस्थिति '{status_val}' के रूप में दर्ज हो"
+        " गई!"
+    )
     st.rerun()
 
   st.sidebar.markdown("---")
   st.sidebar.header("➕ नई छुट्टी जोड़ें (Apply Leave)")
 
   # डेटा फेच करना
-  conn = sqlite3.connect("my_personal_leaves_v8.db")
+  conn = sqlite3.connect("my_personal_leaves_v9.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   conn.close()
@@ -129,6 +147,7 @@ def main():
   cpl_remaining = total_cpl_allocated - cpl_taken
   rh_remaining = 2 - rh_taken
 
+  today_date = date.today()
   available_rh_options = {}
   for rh_name, rh_date_str in OFFICIAL_RH_2026.items():
     rh_dt = datetime.strptime(rh_date_str, "%Y-%m-%d").date()
@@ -162,7 +181,7 @@ def main():
             else today_date
         )
     else:
-      leave_date = st.date_input("छुट्टी की तारीख (Date)")
+      leave_date = st.date_input("छुट्टी की तारीख (Date - पीछे की तारीख भी चुन सकते हैं)")
 
     if leave_category == "RH":
       days_count = 1
@@ -194,7 +213,7 @@ def main():
       if error_msg:
         st.sidebar.error(error_msg)
       else:
-        conn = sqlite3.connect("my_personal_leaves_v8.db")
+        conn = sqlite3.connect("my_personal_leaves_v9.db")
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -209,7 +228,6 @@ def main():
                 str(datetime.now().strftime("%Y-%m-%d %H:%M")),
             ),
         )
-        # Leave lene par attendance ko automatic 'Leave' mark kar sakte hain
         cursor.execute(
             """
                     INSERT OR REPLACE INTO my_attendance (att_date, status)
@@ -237,7 +255,7 @@ def main():
 
   st.markdown("---")
 
-  # --- कैलेंडर व्यू (Monthly/Yearly Calendar Format with Color Coding) ---
+  # --- कैलेंडर व्यू ---
   st.subheader("📅 उपस्थिति और लीव कैलेंडर व्यू (Calendar View)")
 
   c_col1, c_col2 = st.columns(2)
@@ -251,7 +269,6 @@ def main():
         index=today_date.month - 1,
     )
 
-  # डिक्शनरी बनाना अटेंडेंस और लीव की तारीखों के लिए
   att_dict = {}
   if not att_df.empty:
     for _, row in att_df.iterrows():
@@ -262,7 +279,6 @@ def main():
     for _, row in df.iterrows():
       leave_dates_set.add(row["leave_date"])
 
-  # कैलेंडर रेंडर करना
   st.markdown(
       "🟢 **हरा (Present)** | 🔴 **लाल (Leave/Absent)** | ⚪ **सामान्य**"
   )
@@ -270,7 +286,6 @@ def main():
   cal_matrix = calendar.monthcalendar(selected_year, selected_month)
   days_header = ["सोम", "मंगल", "बुध", "गुरु", "शुक्र", "शनि", "रवि"]
 
-  # टेबल फॉर्मेट में कैलेंडर दिखाना
   cal_data = []
   for week in cal_matrix:
     week_row = {}
@@ -314,7 +329,7 @@ def main():
     )
     if st.button("चयनित रिकॉर्ड हटाएं"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v8.db")
+        conn = sqlite3.connect("my_personal_leaves_v9.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
