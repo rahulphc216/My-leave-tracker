@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 import pandas as pd
 import sqlite3
 import streamlit as st
@@ -9,7 +9,7 @@ OFFICIAL_RH_2026 = {
     "Jan 26 - Shab-e-Barat": "2026-01-26",
     "Feb 15 - Maha Shivaratri": "2026-02-15",
     "Mar 04 - Holika Dahan": "2026-03-04",
-    "Apr 03 - Good Friday (Extra/Spec)": "2026-04-03",
+    "Apr 03 - Good Friday": "2026-04-03",
     "Apr 14 - Mahavir Jayanti": "2026-04-14",
     "May 15 - Buddha Purnima": "2026-05-15",
     "Aug 28 - Muharram": "2026-08-28",
@@ -19,7 +19,7 @@ OFFICIAL_RH_2026 = {
 
 # डेटाबेस सेटअप
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v4.db")
+  conn = sqlite3.connect("my_personal_leaves_v5.db")
   cursor = conn.cursor()
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS my_leaves (
@@ -58,7 +58,7 @@ def main():
   st.sidebar.header("➕ नई छुट्टी जोड़ें (Apply Leave)")
 
   # डेटा फेच करना
-  conn = sqlite3.connect("my_personal_leaves_v4.db")
+  conn = sqlite3.connect("my_personal_leaves_v5.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   conn.close()
 
@@ -85,11 +85,17 @@ def main():
   cpl_remaining = total_cpl_allocated - cpl_taken
   rh_remaining = 2 - rh_taken
 
-  # डायनेमिक RH लिस्ट फ़िल्टर करना (जो ले ली गई हैं या जिनकी तारीख निकल चुकी है, उन्हें हटाना)
+  # आज की तारीख (Current Date)
+  today_date = date.today()
+
+  # डायनेमिक RH लिस्ट फ़िल्टर करना:
+  # 1. जो तारीखें निकल चुकी हैं या आज से पहले की हैं, उन्हें हटाएँ।
+  # 2. जो RH पहले ही ली जा चुकी हैं, उन्हें हटाएँ।
   available_rh_options = {}
-  for rh_name, rh_date in OFFICIAL_RH_2026.items():
-    if rh_date not in already_taken_rh_dates:
-      available_rh_options[rh_name] = rh_date
+  for rh_name, rh_date_str in OFFICIAL_RH_2026.items():
+    rh_dt = datetime.strptime(rh_date_str, "%Y-%m-%d").date()
+    if rh_dt >= today_date and rh_date_str not in already_taken_rh_dates:
+      available_rh_options[rh_name] = rh_date_str
 
   with st.sidebar.form("leave_form"):
     leave_category = st.selectbox(
@@ -97,34 +103,37 @@ def main():
         ["CL", "CPL", "EL", "RH", "Late Coming"],
     )
 
-    # अगर RH चुना गया है तो सिर्फ कैलेंडर की ऑफिशियल लिस्ट दिखेगी
+    # अगर RH चुना गया है तो सिर्फ आज और उसके बाद की ऑफिशियल लिस्ट दिखेगी
     if leave_category == "RH":
       if rh_remaining <= 0:
         st.warning("⚠️ आपने इस साल की दोनों (2) RH पहले ही पूरी कर ली हैं!")
         selected_rh_key = None
-        leave_date = datetime.today().date()
+        leave_date = today_date
       elif not available_rh_options:
-        st.info("सभी उपलब्ध Restricted Holidays समाप्त हो चुकी हैं।")
+        st.info(
+            "आज या इसके बाद के लिए कोई भी आगामी Restricted Holiday उपलब्ध नहीं"
+            " है।"
+        )
         selected_rh_key = None
-        leave_date = datetime.today().date()
+        leave_date = today_date
       else:
         selected_rh_key = st.selectbox(
-            "ऑफिशियल कैलेंडर से RH चुनें:", list(available_rh_options.keys())
+            "आज या इसके बाद की वैध RH चुनें:",
+            list(available_rh_options.keys()),
         )
         leave_date = (
             datetime.strptime(
                 available_rh_options[selected_rh_key], "%Y-%m-%d"
             ).date()
             if selected_rh_key
-            else datetime.today().date()
+            else today_date
         )
     else:
       leave_date = st.date_input("छुट्टी की तारीख (Date)")
 
-    # दिनों की संख्या (Integers only)
+    # दिनों की संख्या (Integers only) - RH के लिए ऑटोमैटिक 1 दिन रहेगा, बिना किसी फालतू मैसेज के
     if leave_category == "RH":
-      days_count = 1  # RH hamesha 1 din ki hoti hai
-      st.info("ℹ️ Restricted Holiday (RH) स्वतः 1 दिन की दर्ज होगी।")
+      days_count = 1
     else:
       days_count = st.number_input(
           "दिनों की संख्या (Full Days)",
@@ -160,7 +169,7 @@ def main():
       if error_msg:
         st.sidebar.error(error_msg)
       else:
-        conn = sqlite3.connect("my_personal_leaves_v4.db")
+        conn = sqlite3.connect("my_personal_leaves_v5.db")
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -210,7 +219,7 @@ def main():
         f"शेष: {rh_remaining} दिन (मैक्स 2)",
     )
 
-  # --- फुल डिटेल समरी बॉक्स (Full Detail Breakdown) ---
+  # --- फुल डिटेल समरी बॉक्स ---
   st.markdown("---")
   st.info(
       f"📌 **विस्तृत विवरण (Full Detail Summary - 2026):**\n"
@@ -232,7 +241,7 @@ def main():
     )
     if st.button("चयनित रिकॉर्ड हटाएं"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v4.db")
+        conn = sqlite3.connect("my_personal_leaves_v5.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
