@@ -22,7 +22,9 @@ OFFICIAL_GAZETTED_2026 = {
     "2026-09-04": "Janmashtami",
     "2026-09-17": "Vishwakarma Puja",
     "2026-10-02": "Mahatma Gandhi Birthday",
-    # Durga Puja & October Long Vacation 2026
+    # Durga Puja & October Vacation 2026 (Adjusted as per High Court calendar)
+    "2026-10-16": "Durga Puja Vacation",
+    "2026-10-17": "Durga Puja Vacation",
     "2026-10-18": "Durga Puja (Saptami)",
     "2026-10-19": "Durga Puja (Ashtami)",
     "2026-10-20": "Durga Puja (Navami)",
@@ -30,7 +32,7 @@ OFFICIAL_GAZETTED_2026 = {
     "2026-10-22": "Durga Puja Vacation",
     "2026-10-23": "Durga Puja Vacation",
     "2026-10-24": "Durga Puja Vacation",
-    "2026-10-26": "Lakhshmi Puja",
+    "2026-10-25": "Durga Puja Vacation",
     # Diwali & Chhath Puja Continuous Long Vacation (November 8 to November 17)
     "2026-11-08": "Diwali",
     "2026-11-09": "Govardhan Puja / Chitragupta Puja",
@@ -60,7 +62,7 @@ OFFICIAL_HALFDAY_2026 = {
 
 
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v44.db")
+  conn = sqlite3.connect("my_personal_leaves_v45.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -90,11 +92,13 @@ def init_db():
         )
     """)
 
+  # Custom Holidays & Overrides Table (Saves permanent changes)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS custom_holidays (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             holiday_date TEXT UNIQUE,
-            occasion TEXT
+            occasion TEXT,
+            override_type TEXT
         )
     """)
 
@@ -119,29 +123,37 @@ def main():
       " मासिक/वार्षिक सारांश और अटेंडेंस रजिस्टर"
   )
 
-  conn_h = sqlite3.connect("my_personal_leaves_v44.db")
-  ch = conn_h.cursor()
-  ch.execute(
-      "SELECT occasion FROM custom_holidays WHERE holiday_date = ?",
-      (today_str,),
-  )
-  cust_today = ch.fetchone()
-  conn_h.close()
+  # Fetch overrides from DB
+  conn_chk = sqlite3.connect("my_personal_leaves_v45.db")
+  ch_df = pd.read_sql_query("SELECT * FROM custom_holidays", conn_chk)
+  conn_chk.close()
 
+  holiday_override_dict = {}
+  forced_working_set = set()
+  if not ch_df.empty:
+    for _, row in ch_df.iterrows():
+      h_date = row["holiday_date"]
+      o_type = row["override_type"]  # 'Holiday' or 'Working'
+      if o_type == "Holiday":
+        holiday_override_dict[h_date] = row["occasion"]
+      elif o_type == "Working":
+        forced_working_set.add(h_date)
+
+  # Check today status with overrides
   is_today_gazetted = (
       today_date.year == 2026 and today_str in OFFICIAL_GAZETTED_2026
-  ) or (cust_today is not None)
+  ) or (today_str in holiday_override_dict)
+  if today_str in forced_working_set:
+    is_today_gazetted = False
 
   # --- HOLIDAY NOTIFICATION BANNER ---
-  if is_today_sunday:
+  if is_today_sunday and today_str not in forced_working_set:
     st.info(
         f"🎉 **आज रविवार (Sunday) है — ऑफिस बंद है!** (Date: {today_date})"
     )
   elif is_today_gazetted:
-    occ_name = (
-        cust_today[0]
-        if cust_today
-        else OFFICIAL_GAZETTED_2026.get(today_str, "Gazetted Holiday")
+    occ_name = holiday_override_dict.get(
+        today_str, OFFICIAL_GAZETTED_2026.get(today_str, "Gazetted Holiday")
     )
     st.info(
         f"🎉 **आज सार्वजनिक अवकाश है!** अवसर: **{occ_name}** (Date:"
@@ -160,19 +172,13 @@ def main():
     d_str_sel = str(att_selected_date)
     is_sunday_selected = att_selected_date.weekday() == 6
 
-    conn_val = sqlite3.connect("my_personal_leaves_v44.db")
+    conn_val = sqlite3.connect("my_personal_leaves_v45.db")
     c_val = conn_val.cursor()
     c_val.execute(
         "SELECT leave_type, reason FROM my_leaves WHERE leave_date = ?",
         (d_str_sel,),
     )
     leave_check = c_val.fetchone()
-
-    c_val.execute(
-        "SELECT occasion FROM custom_holidays WHERE holiday_date = ?",
-        (d_str_sel,),
-    )
-    cust_hol_check = c_val.fetchone()
 
     c_val.execute(
         "SELECT status, remarks FROM my_attendance WHERE att_date = ?",
@@ -182,21 +188,20 @@ def main():
     conn_val.close()
 
     is_gaz_sel = (
-        att_selected_date.year == 2026 and d_str_sel in OFFICIAL_GAZETTED_2026
-    ) or (cust_hol_check is not None)
+        (att_selected_date.year == 2026 and d_str_sel in OFFICIAL_GAZETTED_2026)
+        or (d_str_sel in holiday_override_dict)
+    ) and (d_str_sel not in forced_working_set)
 
     if leave_check:
       st.error(
           f"⚠️ **Alert:** Is tareekh par pehle se **Leave ({leave_check[0]})**"
           f" darj hai!"
       )
-    elif is_sunday_selected:
+    elif is_sunday_selected and d_str_sel not in forced_working_set:
       st.warning("📌 **Info:** Yeh din **Sunday (Off)** hai.")
     elif is_gaz_sel:
-      occ_lbl = (
-          cust_hol_check[0]
-          if cust_hol_check
-          else OFFICIAL_GAZETTED_2026.get(d_str_sel, "Gazetted Holiday")
+      occ_lbl = holiday_override_dict.get(
+          d_str_sel, OFFICIAL_GAZETTED_2026.get(d_str_sel, "Gazetted Holiday")
       )
       st.warning(f"📌 **Info:** Yeh din **Gazetted Holiday ({occ_lbl})** hai.")
 
@@ -204,7 +209,7 @@ def main():
         existing_att[1] if existing_att and len(existing_att) > 1 else ""
     )
 
-    if is_sunday_selected:
+    if is_sunday_selected and d_str_sel not in forced_working_set:
       sunday_emergency = st.checkbox(
           "⚠️ Sunday Emergency / Roster Working (छुट्टी के दिन ऑफिस आए थे?)"
       )
@@ -244,7 +249,7 @@ def main():
             f"❌ Error: Is tareekh par Leave ({leave_check[0]}) hai, attendance"
             " save nahi ho sakti!"
         )
-      elif (is_sunday_selected or is_gaz_sel) and attendance_status in [
+      elif ((is_sunday_selected and d_str_sel not in forced_working_set) or is_gaz_sel) and attendance_status in [
           "Office Present",
           "Roster Duty (Holiday Working)",
       ] and not remarks_input.strip():
@@ -265,7 +270,7 @@ def main():
         else:
           status_db = "Absent"
 
-        conn = sqlite3.connect("my_personal_leaves_v44.db")
+        conn = sqlite3.connect("my_personal_leaves_v45.db")
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -289,7 +294,7 @@ def main():
     d_str_chk = str(check_date)
     chk_weekday = check_date.weekday()
 
-    conn = sqlite3.connect("my_personal_leaves_v44.db")
+    conn = sqlite3.connect("my_personal_leaves_v45.db")
     c = conn.cursor()
     c.execute(
         "SELECT status, remarks FROM my_attendance WHERE att_date = ?",
@@ -302,27 +307,22 @@ def main():
         (d_str_chk,),
     )
     leave_res = c.fetchone()
-
-    c.execute(
-        "SELECT occasion FROM custom_holidays WHERE holiday_date = ?",
-        (d_str_chk,),
-    )
-    cust_res = c.fetchone()
     conn.close()
 
     is_sun = chk_weekday == 6
-    is_gaz = check_date.year == 2026 and d_str_chk in OFFICIAL_GAZETTED_2026
-    is_cust = cust_res is not None
+    is_gaz = (
+        (check_date.year == 2026 and d_str_chk in OFFICIAL_GAZETTED_2026)
+        or (d_str_chk in holiday_override_dict)
+    ) and (d_str_chk not in forced_working_set)
     is_half = check_date.year == 2026 and d_str_chk in OFFICIAL_HALFDAY_2026
 
-    if is_sun:
+    if is_sun and d_str_chk not in forced_working_set:
       day_type_str = "Sunday Off"
-    elif is_cust:
-      day_type_str = (
-          f"Gazetted Holiday ({cust_res[0] if cust_res else 'Custom Off'})"
-      )
     elif is_gaz:
-      day_type_str = f"Gazetted Holiday ({OFFICIAL_GAZETTED_2026[d_str_chk]})"
+      occ_lbl = holiday_override_dict.get(
+          d_str_chk, OFFICIAL_GAZETTED_2026.get(d_str_chk, "Gazetted Holiday")
+      )
+      day_type_str = f"Gazetted Holiday ({occ_lbl})"
     elif is_half:
       day_type_str = "Half-Day Office Day"
     else:
@@ -333,7 +333,7 @@ def main():
     elif att_res:
       db_st = att_res[0]
       if db_st == "Present":
-        if is_sun or is_gaz or is_cust:
+        if (is_sun and d_str_chk not in forced_working_set) or is_gaz:
           action_str = f"Present in Roster (Holiday Working) | Remarks: {att_res[1]}"
         else:
           action_str = f"Regular Present | Remarks: {att_res[1]}"
@@ -346,7 +346,7 @@ def main():
       else:
         action_str = f"{db_st} | Remarks: {att_res[1]}"
     else:
-      if is_sun or is_gaz or is_cust:
+      if (is_sun and d_str_chk not in forced_working_set) or is_gaz:
         action_str = "Off Day (No entry made)"
       else:
         action_str = "No attendance entry made yet"
@@ -356,7 +356,7 @@ def main():
 
   # --- 3. EDIT / DELETE ATTENDANCE REGISTER ---
   with st.sidebar.expander("✏️ पुरानी अटेंडेंस एडिट या सुधार करें"):
-    conn = sqlite3.connect("my_personal_leaves_v44.db")
+    conn = sqlite3.connect("my_personal_leaves_v45.db")
     att_df_all = pd.read_sql_query(
         "SELECT * FROM my_attendance ORDER BY att_date DESC", conn
     )
@@ -391,7 +391,7 @@ def main():
       col_e1, col_e2 = st.columns(2)
       with col_e1:
         if st.button("Update Karein"):
-          conn = sqlite3.connect("my_personal_leaves_v44.db")
+          conn = sqlite3.connect("my_personal_leaves_v45.db")
           cursor = conn.cursor()
           cursor.execute(
               "UPDATE my_attendance SET status = ?, remarks = ? WHERE att_date"
@@ -404,7 +404,7 @@ def main():
           st.rerun()
       with col_e2:
         if st.button("Record Hatayein"):
-          conn = sqlite3.connect("my_personal_leaves_v44.db")
+          conn = sqlite3.connect("my_personal_leaves_v45.db")
           cursor = conn.cursor()
           cursor.execute(
               "DELETE FROM my_attendance WHERE att_date = ?",
@@ -421,7 +421,7 @@ def main():
   with st.sidebar.expander(
       "➕ एडवांस / नई छुट्टी जोड़ें (Apply / Advance Leave)", expanded=False
   ):
-    conn = sqlite3.connect("my_personal_leaves_v44.db")
+    conn = sqlite3.connect("my_personal_leaves_v45.db")
     df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
@@ -475,7 +475,7 @@ def main():
         if error_msg:
           st.error(error_msg)
         else:
-          conn = sqlite3.connect("my_personal_leaves_v44.db")
+          conn = sqlite3.connect("my_personal_leaves_v45.db")
           cursor = conn.cursor()
           cursor.execute(
               """
@@ -502,63 +502,84 @@ def main():
           st.success("✅ छुट्टी दर्ज हो गई और अटेंडेंस में स्वतः अपडेट हो गई!")
           st.rerun()
 
-  # --- 5. QUICK ADD / DELETE CUSTOM HOLIDAY (UPDATED) ---
-  with st.sidebar.expander("📌 छुट्टी जोड़े या हटाएं (Manage Custom Holidays)"):
-    st.markdown("### **नया अवकाश जोड़ें**")
-    missing_date = st.date_input(
-        "छुट्टी की तारीख (Date)", value=today_date, key="miss_date"
+  # --- 5. HOLIDAY OVERRIDE MANAGER (FIX WRONG/EXTRA HOLIDAYS PERMANENTLY) ---
+  with st.sidebar.expander(
+      "🛠️ कैलेंडर सुधार / छुट्टी सेटिंग्स (Holiday Override)"
+  ):
+    st.markdown(
+        "### **तारीख को छुट्टी या वर्किंग डे बनाएं (Permanent Save)**"
     )
-    missing_occasion = st.text_input(
-        "अवसर/वजह (जैसे Gazetted Holiday)", value="Gazetted Holiday"
+    ov_date = st.date_input(
+        "तारीख चुनें", value=today_date, key="ov_date_input"
     )
-    if st.button("छुट्टी सेव करें", use_container_width=True):
-      conn = sqlite3.connect("my_personal_leaves_v44.db")
+    ov_action = st.selectbox(
+        "क्या करना चाहते हैं?",
+        [
+            "इसे Gazetted Holiday (छुट्टी) बनाएं",
+            "इसे Normal Working Day (खुला दिन) बनाएं",
+        ],
+    )
+    ov_reason = st.text_input(
+        "वजह / अवसर (जैसे Durga Puja Vacation)", value="Vacation / Working Day"
+    )
+
+    if st.button("बदलाव सुरक्षित करें (Save Override)", use_container_width=True):
+      conn = sqlite3.connect("my_personal_leaves_v45.db")
       cursor = conn.cursor()
-      try:
+      d_str = str(ov_date)
+      if "Holiday" in ov_action:
         cursor.execute(
             """
-                    INSERT OR REPLACE INTO custom_holidays (holiday_date, occasion)
-                    VALUES (?, ?)
+                    INSERT OR REPLACE INTO custom_holidays (holiday_date, occasion, override_type)
+                    VALUES (?, ?, ?)
                 """,
-            (str(missing_date), missing_occasion),
+            (d_str, ov_reason, "Holiday"),
         )
-        conn.commit()
-        st.success(f"✅ {missing_date} ko chhutti ke roop me jod diya gaya!")
-      except Exception as e:
-        st.error(f"Error: {e}")
-      finally:
-        conn.close()
+        st.success(f"✅ {d_str} ko permanent holiday ke roop me save kar diya!")
+      else:
+        cursor.execute(
+            """
+                    INSERT OR REPLACE INTO custom_holidays (holiday_date, occasion, override_type)
+                    VALUES (?, ?, ?)
+                """,
+            (d_str, ov_reason, "Working"),
+        )
+        st.success(
+            f"✅ {d_str} ki extra holiday hata kar working day bana diya!"
+        )
+      conn.commit()
+      conn.close()
       st.rerun()
 
     st.markdown("---")
-    st.markdown("### **जोड़ी गई छुट्टी हटाएं (Delete Holiday)**")
-    conn_del = sqlite3.connect("my_personal_leaves_v44.db")
-    cust_df = pd.read_sql_query(
-        "SELECT * FROM custom_holidays ORDER BY holiday_date DESC", conn_del
-    )
-    conn_del.close()
+    st.markdown("### **सहेजे गए ओवरराइड्स हटाएं (Reset)**")
+    conn_r = sqlite3.connect("my_personal_leaves_v45.db")
+    saved_ov = pd.read_sql_query("SELECT * FROM custom_holidays", conn_r)
+    conn_r.close()
 
-    if not cust_df.empty:
-      del_hol_date = st.selectbox(
-          "हटाने के लिए तारीख चुनें:", cust_df["holiday_date"].tolist()
+    if not saved_ov.empty:
+      del_target = st.selectbox(
+          "रीसेट के लिए तारीख चुनें:", saved_ov["holiday_date"].tolist()
       )
-      if st.button("चयनित छुट्टी हटाएं", use_container_width=True):
-        conn_d = sqlite3.connect("my_personal_leaves_v44.db")
+      if st.button("ओवरराइड हटाएं (Reset to Default)", use_container_width=True):
+        conn_d = sqlite3.connect("my_personal_leaves_v45.db")
         cursor_d = conn_d.cursor()
         cursor_d.execute(
-            "DELETE FROM custom_holidays WHERE holiday_date = ?",
-            (del_hol_date,),
+            "DELETE FROM custom_holidays WHERE holiday_date = ?", (del_target,)
         )
         conn_d.commit()
         conn_d.close()
-        st.success(f"✅ {del_hol_date} ki holiday hata di gayi hai!")
+        st.success(
+            f"✅ {del_target} ka override hata diya gaya, default rule laagu"
+            " ho gaya!"
+        )
         st.rerun()
     else:
-      st.info("Abhi koi custom holiday add nahi ki gayi hai.")
+      st.info("Abhi koi custom override save nahi hai.")
 
   # --- 6. MANUAL CPL SETTINGS ---
   with st.sidebar.expander("⚙️ मैनुअल CPL कोटा सेटिंग्स"):
-    conn = sqlite3.connect("my_personal_leaves_v44.db")
+    conn = sqlite3.connect("my_personal_leaves_v45.db")
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
     saved_cpl = c.fetchone()
@@ -573,7 +594,7 @@ def main():
         step=1,
     )
     if st.button("CPL सेव करें"):
-      conn = sqlite3.connect("my_personal_leaves_v44.db")
+      conn = sqlite3.connect("my_personal_leaves_v45.db")
       cursor = conn.cursor()
       cursor.execute("DELETE FROM my_cpl_setting")
       cursor.execute(
@@ -586,7 +607,7 @@ def main():
       st.rerun()
 
   # Refresh data for main view
-  conn = sqlite3.connect("my_personal_leaves_v44.db")
+  conn = sqlite3.connect("my_personal_leaves_v45.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   custom_hol_df = pd.read_sql_query("SELECT * FROM custom_holidays", conn)
@@ -596,10 +617,16 @@ def main():
   active_cpl_quota = saved_cpl[0] if saved_cpl else 0
   conn.close()
 
-  custom_hol_dict = {}
+  holiday_override_dict = {}
+  forced_working_set = set()
   if not custom_hol_df.empty:
     for _, row in custom_hol_df.iterrows():
-      custom_hol_dict[row["holiday_date"]] = row["occasion"]
+      h_date = row["holiday_date"]
+      o_type = row["override_type"]
+      if o_type == "Holiday":
+        holiday_override_dict[h_date] = row["occasion"]
+      elif o_type == "Working":
+        forced_working_set.add(h_date)
 
   cl_taken = (
       df[df["leave_type"] == "CL"]["days_count"].sum() if not df.empty else 0
@@ -659,11 +686,15 @@ def main():
     dt_str = str(dt_obj)
     w_day = dt_obj.weekday()
     is_sun = w_day == 6
-    is_gaz = (sum_year == 2026 and dt_str in OFFICIAL_GAZETTED_2026) or (
-        dt_str in custom_hol_dict
-    )
+    
+    is_gaz = (
+        (sum_year == 2026 and dt_str in OFFICIAL_GAZETTED_2026)
+        or (dt_str in holiday_override_dict)
+    ) and (dt_str not in forced_working_set)
 
-    if not is_sun and not is_gaz:
+    is_off_day = (is_sun and dt_str not in forced_working_set) or is_gaz
+
+    if not is_off_day:
       mo_working_days += 1
 
     att_row = (
@@ -678,7 +709,7 @@ def main():
     elif not att_row.empty:
       st_val = att_row.iloc[0]["status"]
       if st_val == "Present":
-        if is_sun or is_gaz:
+        if is_off_day:
           mo_roster_working += 1
         else:
           mo_regular_present += 1
@@ -780,9 +811,12 @@ def main():
         d_str = f"{selected_year}-{selected_month:02d}-{day:02d}"
         status = att_dict.get(d_str, "")
         is_sunday = i == 6
+        
         is_gazetted = (
-            selected_year == 2026 and d_str in OFFICIAL_GAZETTED_2026
-        ) or (d_str in custom_hol_dict)
+            (selected_year == 2026 and d_str in OFFICIAL_GAZETTED_2026)
+            or (d_str in holiday_override_dict)
+        ) and (d_str not in forced_working_set)
+        
         is_halfday = selected_year == 2026 and d_str in OFFICIAL_HALFDAY_2026
 
         bg_color = "#ffffff"
@@ -791,12 +825,14 @@ def main():
         tooltip = ""
         extra_badge = ""
 
+        is_off_day = (is_sunday and d_str not in forced_working_set) or is_gazetted
+
         if "Leave" in status or d_str in leave_dates_set:
           bg_color = "#ffebee"
           text_color = "#c62828"
           border_color = "#ef9a9a"
         elif status == "Present" or status == "Sunday Emergency":
-          if is_sunday or is_gazetted:
+          if is_off_day:
             bg_color = "#c8e6c9"
             text_color = "#1b5e20"
             border_color = "#2e7d32"
@@ -807,12 +843,12 @@ def main():
           else:
             bg_color = "#e8f5e9"
             text_color = "#2e7d32"
-        elif is_sunday or is_gazetted:
+        elif is_off_day:
           bg_color = "#e3f2fd"
           text_color = "#1565c0"
-          if d_str in custom_hol_dict:
-            tooltip = f" title='{custom_hol_dict[d_str]}'"
-          elif is_gazetted:
+          if d_str in holiday_override_dict:
+            tooltip = f" title='{holiday_override_dict[d_str]}'"
+          elif d_str in OFFICIAL_GAZETTED_2026:
             tooltip = f" title='{OFFICIAL_GAZETTED_2026[d_str]}'"
         elif is_halfday or status == "Half-Day":
           bg_color = "#fffde7"
@@ -837,7 +873,7 @@ def main():
     )
     if st.button("चयनित रिकॉर्ड हटाएं"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v44.db")
+        conn = sqlite3.connect("my_personal_leaves_v45.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
