@@ -62,7 +62,7 @@ OFFICIAL_HALFDAY_2026 = {
 
 
 def init_db():
-  conn = sqlite3.connect("my_personal_leaves_v46.db")
+  conn = sqlite3.connect("my_personal_leaves_v47.db")
   cursor = conn.cursor()
 
   cursor.execute("""
@@ -123,7 +123,7 @@ def main():
   )
 
   # Fetch overrides from DB
-  conn_chk = sqlite3.connect("my_personal_leaves_v46.db")
+  conn_chk = sqlite3.connect("my_personal_leaves_v47.db")
   ch_df = pd.read_sql_query("SELECT * FROM custom_holidays", conn_chk)
   conn_chk.close()
 
@@ -170,7 +170,7 @@ def main():
     d_str_sel = str(att_selected_date)
     is_sunday_selected = att_selected_date.weekday() == 6
 
-    conn_val = sqlite3.connect("my_personal_leaves_v46.db")
+    conn_val = sqlite3.connect("my_personal_leaves_v47.db")
     c_val = conn_val.cursor()
     c_val.execute(
         "SELECT leave_type, reason FROM my_leaves WHERE leave_date = ?",
@@ -264,7 +264,7 @@ def main():
         else:
           status_db = "Absent"
 
-        conn = sqlite3.connect("my_personal_leaves_v46.db")
+        conn = sqlite3.connect("my_personal_leaves_v47.db")
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -288,7 +288,7 @@ def main():
     d_str_chk = str(check_date)
     chk_weekday = check_date.weekday()
 
-    conn = sqlite3.connect("my_personal_leaves_v46.db")
+    conn = sqlite3.connect("my_personal_leaves_v47.db")
     c = conn.cursor()
     c.execute(
         "SELECT status, remarks FROM my_attendance WHERE att_date = ?",
@@ -350,7 +350,7 @@ def main():
 
   # --- 3. EDIT / DELETE ATTENDANCE REGISTER ---
   with st.sidebar.expander("✏️ पुरानी अटेंडेंस एडिट या सुधार करें"):
-    conn = sqlite3.connect("my_personal_leaves_v46.db")
+    conn = sqlite3.connect("my_personal_leaves_v47.db")
     att_df_all = pd.read_sql_query(
         "SELECT * FROM my_attendance ORDER BY att_date DESC", conn
     )
@@ -385,7 +385,7 @@ def main():
       col_e1, col_e2 = st.columns(2)
       with col_e1:
         if st.button("Update Karein"):
-          conn = sqlite3.connect("my_personal_leaves_v46.db")
+          conn = sqlite3.connect("my_personal_leaves_v47.db")
           cursor = conn.cursor()
           cursor.execute(
               "UPDATE my_attendance SET status = ?, remarks = ? WHERE att_date"
@@ -398,7 +398,7 @@ def main():
           st.rerun()
       with col_e2:
         if st.button("Record Hatayein"):
-          conn = sqlite3.connect("my_personal_leaves_v46.db")
+          conn = sqlite3.connect("my_personal_leaves_v47.db")
           cursor = conn.cursor()
           cursor.execute(
               "DELETE FROM my_attendance WHERE att_date = ?",
@@ -415,7 +415,7 @@ def main():
   with st.sidebar.expander(
       "➕ एडवांस / नई छुट्टी जोड़ें (Apply / Advance Leave)", expanded=False
   ):
-    conn = sqlite3.connect("my_personal_leaves_v46.db")
+    conn = sqlite3.connect("my_personal_leaves_v47.db")
     df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
@@ -469,7 +469,7 @@ def main():
         if error_msg:
           st.toast(error_msg, icon="❌")
         else:
-          conn = sqlite3.connect("my_personal_leaves_v46.db")
+          conn = sqlite3.connect("my_personal_leaves_v47.db")
           cursor = conn.cursor()
           cursor.execute(
               """
@@ -518,7 +518,7 @@ def main():
     )
 
     if st.button("बदलाव सुरक्षित करें (Save Override)", use_container_width=True):
-      conn = sqlite3.connect("my_personal_leaves_v46.db")
+      conn = sqlite3.connect("my_personal_leaves_v47.db")
       cursor = conn.cursor()
       d_str = str(ov_date)
       if "Holiday" in ov_action:
@@ -545,7 +545,7 @@ def main():
 
     st.markdown("---")
     st.markdown("### **सहेजे गए ओवरराइड्स हटाएं (Reset)**")
-    conn_r = sqlite3.connect("my_personal_leaves_v46.db")
+    conn_r = sqlite3.connect("my_personal_leaves_v47.db")
     saved_ov = pd.read_sql_query("SELECT * FROM custom_holidays", conn_r)
     conn_r.close()
 
@@ -554,7 +554,7 @@ def main():
           "रीसेट के लिए तारीख चुनें:", saved_ov["holiday_date"].tolist()
       )
       if st.button("ओवरराइड हटाएं (Reset to Default)", use_container_width=True):
-        conn_d = sqlite3.connect("my_personal_leaves_v46.db")
+        conn_d = sqlite3.connect("my_personal_leaves_v47.db")
         cursor_d = conn_d.cursor()
         cursor_d.execute(
             "DELETE FROM custom_holidays WHERE holiday_date = ?", (del_target,)
@@ -568,7 +568,7 @@ def main():
 
   # --- 6. MANUAL CPL SETTINGS ---
   with st.sidebar.expander("⚙️ मैनुअल CPL कोटा सेटिंग्स"):
-    conn = sqlite3.connect("my_personal_leaves_v46.db")
+    conn = sqlite3.connect("my_personal_leaves_v47.db")
     c = conn.cursor()
     c.execute("SELECT total_cpl FROM my_cpl_setting ORDER BY id DESC LIMIT 1")
     saved_cpl = c.fetchone()
@@ -583,7 +583,7 @@ def main():
         step=1,
     )
     if st.button("CPL सेव करें"):
-      conn = sqlite3.connect("my_personal_leaves_v46.db")
+      conn = sqlite3.connect("my_personal_leaves_v47.db")
       cursor = conn.cursor()
       cursor.execute("DELETE FROM my_cpl_setting")
       cursor.execute(
@@ -596,7 +596,7 @@ def main():
       st.rerun()
 
   # Refresh data for main view
-  conn = sqlite3.connect("my_personal_leaves_v46.db")
+  conn = sqlite3.connect("my_personal_leaves_v47.db")
   df = pd.read_sql_query("SELECT * FROM my_leaves ORDER BY id DESC", conn)
   att_df = pd.read_sql_query("SELECT * FROM my_attendance", conn)
   custom_hol_df = pd.read_sql_query("SELECT * FROM custom_holidays", conn)
@@ -731,7 +731,7 @@ def main():
 
   st.markdown("---")
 
-  # --- Advanced HTML Color-Coded Calendar View ---
+  # --- Advanced HTML Calendar View with Clear Badge System ---
   st.subheader("📅 कैलेंडर व्यू")
 
   c_col1, c_col2 = st.columns(2)
@@ -755,14 +755,15 @@ def main():
     for _, row in df.iterrows():
       leave_dates_set.add(row["leave_date"])
 
+  # Clear Legend with Badge Indicators
   st.markdown(
       """
     <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; font-size: 13px; font-weight: bold;">
-        <span style="color: #2e7d32; background: #e8f5e9; padding: 3px 6px; border-radius: 4px;">🟢 Present / Roster</span>
-        <span style="color: #f57f17; background: #fffde7; padding: 3px 6px; border-radius: 4px;">🟡 Half-Day</span>
-        <span style="color: #c62828; background: #ffebee; padding: 3px 6px; border-radius: 4px;">🔴 Leave</span>
-        <span style="color: #1565c0; background: #e3f2fd; padding: 3px 6px; border-radius: 4px;">🔵 Sunday / Gazetted Off</span>
-        <span style="color: #616161; background: #f5f5f5; padding: 3px 6px; border-radius: 4px;">⚪ Normal</span>
+        <span style="background: #e8f5e9; color: #2e7d32; padding: 4px 8px; border-radius: 4px; border: 1px solid #c8e6c9;">🟢 Present / Roster</span>
+        <span style="background: #fffde7; color: #f57f17; padding: 4px 8px; border-radius: 4px; border: 1px solid #fff9c4;">🟡 Half-Day</span>
+        <span style="background: #ffebee; color: #c62828; padding: 4px 8px; border-radius: 4px; border: 1px solid #ffcdd2;">🔴 Leave</span>
+        <span style="background: #e3f2fd; color: #1565c0; padding: 4px 8px; border-radius: 4px; border: 1px solid #bbdefb;">🔵 Sunday / Holiday</span>
+        <span style="background: #ffffff; color: #333333; padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd;">⚪ Normal</span>
     </div>
     """,
       unsafe_allow_html=True,
@@ -793,7 +794,7 @@ def main():
     for i, day in enumerate(week):
       if day == 0:
         html_table += (
-            "<td style='border: 1px solid #ddd; padding: 10px;"
+            "<td style='border: 1px solid #ddd; padding: 12px;"
             " background-color: #fafafa;'></td>"
         )
       else:
@@ -808,44 +809,31 @@ def main():
         
         is_halfday = selected_year == 2026 and d_str in OFFICIAL_HALFDAY_2026
 
-        bg_color = "#ffffff"
-        text_color = "#333333"
-        border_color = "#ddd"
         tooltip = ""
-        extra_badge = ""
-
+        badge_html = ""
         is_off_day = (is_sunday and d_str not in forced_working_set) or is_gazetted
 
+        # Logic for status badges (Keeping digit color perfectly black & clear)
         if "Leave" in status or d_str in leave_dates_set:
-          bg_color = "#ffebee"
-          text_color = "#c62828"
-          border_color = "#ef9a9a"
+          badge_html = "<br><span style='font-size:10px; background:#ffebee; color:#c62828; padding:2px 4px; border-radius:3px; font-weight:bold;'>Leave</span>"
         elif status == "Present" or status == "Sunday Emergency":
           if is_off_day:
-            bg_color = "#c8e6c9"
-            text_color = "#1b5e20"
-            border_color = "#2e7d32"
-            extra_badge = (
-                "<br><span style='font-size:10px; background:#2e7d32; color:white;"
-                " padding:1px 3px; border-radius:3px;'>Roster</span>"
-            )
+            badge_html = "<br><span style='font-size:10px; background:#c8e6c9; color:#1b5e20; padding:2px 4px; border-radius:3px; font-weight:bold;'>Roster</span>"
           else:
-            bg_color = "#e8f5e9"
-            text_color = "#2e7d32"
+            badge_html = "<br><span style='font-size:10px; background:#e8f5e9; color:#2e7d32; padding:2px 4px; border-radius:3px; font-weight:bold;'>Present</span>"
         elif is_off_day:
-          bg_color = "#e3f2fd"
-          text_color = "#1565c0"
+          badge_html = "<br><span style='font-size:10px; background:#e3f2fd; color:#1565c0; padding:2px 4px; border-radius:3px; font-weight:bold;'>Off</span>"
           if d_str in holiday_override_dict:
             tooltip = f" title='{holiday_override_dict[d_str]}'"
           elif d_str in OFFICIAL_GAZETTED_2026:
             tooltip = f" title='{OFFICIAL_GAZETTED_2026[d_str]}'"
         elif is_halfday or status == "Half-Day":
-          bg_color = "#fffde7"
-          text_color = "#f57f17"
+          badge_html = "<br><span style='font-size:10px; background:#fffde7; color:#f57f17; padding:2px 4px; border-radius:3px; font-weight:bold;'>Half</span>"
           if is_halfday:
             tooltip = f" title='{OFFICIAL_HALFDAY_2026[d_str]}'"
 
-        html_table += f"<td{tooltip} style='border: 2px solid {border_color}; padding: 8px 2px; background-color: {bg_color}; color: {text_color}; font-weight: bold; font-size: 15px;'>{day}{extra_badge}</td>"
+        # Cell background remains clean white, digit remains clear dark (#222)
+        html_table += f"<td{tooltip} style='border: 1px solid #e0e0e0; padding: 8px 2px; background-color: #ffffff; color: #222222; font-weight: bold; font-size: 16px; vertical-align: middle;'>{day}{badge_html}</td>"
     html_table += "</tr>"
   html_table += "</table>"
 
@@ -862,7 +850,7 @@ def main():
     )
     if st.button("चयनित रिकॉर्ड हटाएं"):
       if del_id > 0:
-        conn = sqlite3.connect("my_personal_leaves_v46.db")
+        conn = sqlite3.connect("my_personal_leaves_v47.db")
         cursor = conn.cursor()
         cursor.execute("DELETE FROM my_leaves WHERE id = ?", (del_id,))
         conn.commit()
